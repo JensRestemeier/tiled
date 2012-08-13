@@ -143,7 +143,9 @@ SOURCES += aboutdialog.cpp \
     colourbrushitem.cpp \
     paintcolourlayer.cpp \
     colourpainter.cpp \
-    colourlayeritem.cpp
+    colourlayeritem.cpp \
+    colourselectiontool.cpp \
+    erasecolours.cpp
 
 HEADERS += aboutdialog.h \
     abstractobjecttool.h \
@@ -250,11 +252,13 @@ HEADERS += aboutdialog.h \
     terrainview.h \
     terrainmodel.h \
     colourbrush.h \
-    abstracecolourtool.h \
     colourbrushitem.h \
     paintcolourlayer.h \
     colourpainter.h \
-    colourlayeritem.h
+    colourlayeritem.h \
+    colourselectiontool.h \
+    abstractcolourtool.h \
+    erasecolours.h
 
 macx {
     OBJECTIVE_SOURCES += macsupport.mm

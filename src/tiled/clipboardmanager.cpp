@@ -28,6 +28,7 @@
 #include "tmxmapwriter.h"
 #include "tile.h"
 #include "tilelayer.h"
+#include "colourlayer.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -80,6 +81,7 @@ void ClipboardManager::copySelection(const MapDocument *mapDocument)
     const QRegion &tileSelection = mapDocument->tileSelection();
     const QList<MapObject*> &selectedObjects = mapDocument->selectedObjects();
     const TileLayer *tileLayer = dynamic_cast<const TileLayer*>(currentLayer);
+    const ColourLayer * colourLayer = dynamic_cast<const ColourLayer*>(currentLayer);
     Layer *copyLayer = 0;
 
     if (!tileSelection.isEmpty() && tileLayer) {
@@ -92,6 +94,9 @@ void ClipboardManager::copySelection(const MapDocument *mapDocument)
         foreach (const MapObject *mapObject, selectedObjects)
             objectGroup->addObject(mapObject->clone());
         copyLayer = objectGroup;
+    } else if (!tileSelection.isEmpty() && colourLayer) {
+        copyLayer = colourLayer->copy(tileSelection.translated(-colourLayer->x(),
+                                                                  -colourLayer->y()));
     } else {
         return;
     }

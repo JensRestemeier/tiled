@@ -32,7 +32,7 @@
 #include "imagelayer.h"
 #include "objectgroup.h"
 #include "tilelayer.h"
-
+#include "colourlayer.h"
 
 using namespace Tiled;
 
@@ -88,4 +88,9 @@ ObjectGroup *Layer::asObjectGroup()
 ImageLayer *Layer::asImageLayer()
 {
     return isImageLayer() ? static_cast<ImageLayer*>(this) : 0;
+}
+
+ColourLayer *Layer::asColourLayer()
+{
+    return isColourLayer() ? static_cast<ColourLayer*>(this) : 0;
 }

@@ -37,6 +37,7 @@
 #include "editpolygontool.h"
 #include "eraser.h"
 #include "erasetiles.h"
+#include "erasecolours.h"
 #include "bucketfilltool.h"
 #include "filltiles.h"
 #include "languagemanager.h"
@@ -79,6 +80,7 @@
 #include "commandbutton.h"
 #include "objectsdock.h"
 #include "colourbrush.h"
+#include "colourselectiontool.h"
 
 #ifdef Q_WS_MAC
 #include "macsupport.h"
@@ -377,6 +379,7 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
     toolManager->registerTool(polylineObjectsTool);
     toolManager->addSeparator();
     toolManager->registerTool(mColourBrush);
+    toolManager->registerTool(new ColourSelectionTool(this));
 
     addToolBar(toolManager->toolBar());
 
@@ -880,6 +883,7 @@ void MainWindow::cut()
         return;
 
     TileLayer *tileLayer = dynamic_cast<TileLayer*>(currentLayer);
+    ColourLayer * colourLayer = dynamic_cast<ColourLayer*>(currentLayer);
     const QRegion &tileSelection = mMapDocument->tileSelection();
     const QList<MapObject*> &selectedObjects = mMapDocument->selectedObjects();
 
@@ -890,6 +894,8 @@ void MainWindow::cut()
 
     if (tileLayer && !tileSelection.isEmpty()) {
         stack->push(new EraseTiles(mMapDocument, tileLayer, tileSelection));
+    } else if (colourLayer && !tileSelection.isEmpty()) {
+        stack->push(new EraseColours(mMapDocument, colourLayer, tileSelection));
     } else if (!selectedObjects.isEmpty()) {
         foreach (MapObject *mapObject, selectedObjects)
             stack->push(new RemoveMapObject(mMapDocument, mapObject));
@@ -940,6 +946,11 @@ void MainWindow::paste()
         mActionHandler->selectNone();
         setStampBrush(tileLayer);
         ToolManager::instance()->selectTool(mStampBrush);
+    } else if (ColourLayer *colourLayer = layer->asColourLayer()) {
+        // Reset selection and paste into the colour stamp brush
+        mActionHandler->selectNone();
+        setColourBrush(colourLayer);
+        ToolManager::instance()->selectTool(mColourBrush);
     } else if (ObjectGroup *objectGroup = layer->asObjectGroup()) {
         if (ObjectGroup *currentObjectGroup = currentLayer->asObjectGroup()) {
             // Determine where to insert the objects
@@ -994,6 +1005,7 @@ void MainWindow::delete_()
     if (!currentLayer)
         return;
 
+    ColourLayer * colourLayer = dynamic_cast<ColourLayer*>(currentLayer);
     TileLayer *tileLayer = dynamic_cast<TileLayer*>(currentLayer);
     const QRegion &tileSelection = mMapDocument->tileSelection();
     const QList<MapObject*> &selectedObjects = mMapDocument->selectedObjects();
@@ -1003,6 +1015,8 @@ void MainWindow::delete_()
 
     if (tileLayer && !tileSelection.isEmpty()) {
         undoStack->push(new EraseTiles(mMapDocument, tileLayer, tileSelection));
+    } else if (colourLayer && !tileSelection.isEmpty()) {
+      undoStack->push(new EraseColours(mMapDocument, colourLayer, tileSelection));
     } else if (!selectedObjects.isEmpty()) {
         foreach (MapObject *mapObject, selectedObjects)
             undoStack->push(new RemoveMapObject(mMapDocument, mapObject));
@@ -1229,6 +1243,7 @@ void MainWindow::updateActions()
     Map *map = 0;
     bool tileLayerSelected = false;
     bool objectsSelected = false;
+    bool colourLayerSelected = false;
     QRegion selection;
 
     if (mMapDocument) {
@@ -1236,11 +1251,12 @@ void MainWindow::updateActions()
 
         map = mMapDocument->map();
         tileLayerSelected = dynamic_cast<TileLayer*>(currentLayer) != 0;
+        colourLayerSelected = dynamic_cast<ColourLayer*>(currentLayer) != 0;
         objectsSelected = !mMapDocument->selectedObjects().isEmpty();
         selection = mMapDocument->tileSelection();
     }
 
-    const bool canCopy = (tileLayerSelected && !selection.isEmpty())
+    const bool canCopy = ((tileLayerSelected || colourLayerSelected) && !selection.isEmpty())
             || objectsSelected;
 
     mUi->actionSave->setEnabled(map);

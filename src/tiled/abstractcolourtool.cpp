@@ -1,4 +1,4 @@
-#include "abstracecolourtool.h"
+#include "abstractcolourtool.h"
 
 #include "colourbrushitem.h"
 #include "map.h"

@@ -1,7 +1,7 @@
 #ifndef COLOURBRUSH_H
 #define COLOURBRUSH_H
 
-#include "abstracecolourtool.h"
+#include "abstractcolourtool.h"
 #include "colourlayer.h"
 
 namespace Tiled {
