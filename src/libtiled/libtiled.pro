@@ -49,8 +49,10 @@ HEADERS += compression.h \
     map.h \
     mapobject.h \
     mapreader.h \
+    mapreaderinterface.h \
     maprenderer.h \
     mapwriter.h \
+    mapwriterinterface.h \
     object.h \
     objectgroup.h \
     orthogonalrenderer.h \
@@ -63,6 +65,11 @@ HEADERS += compression.h \
     gidmapper.h \
     terrain.h \
     colourlayer.h
+
+headers.files = $${HEADERS}
+headers.path = $${PREFIX}/include/tiled
+INSTALLS += headers
+
 macx {
     contains(QT_CONFIG, ppc):CONFIG += x86 \
         ppc

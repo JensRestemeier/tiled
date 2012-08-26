@@ -627,6 +627,9 @@ void MapWriterPrivate::writeObject(QXmlStreamWriter &w,
         w.writeEndElement();
     }
 
+    if (mapObject->shape() == MapObject::Ellipse)
+        w.writeEmptyElement(QLatin1String("ellipse"));
+
     w.writeEndElement();
 }
 

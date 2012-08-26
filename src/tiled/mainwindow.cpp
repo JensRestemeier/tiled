@@ -50,6 +50,7 @@
 #include "mapobject.h"
 #include "mappropertiesdialog.h"
 #include "maprenderer.h"
+#include "mapsdock.h"
 #include "mapscene.h"
 #include "newmapdialog.h"
 #include "newtilesetdialog.h"
@@ -113,6 +114,7 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
     , mMapDocument(0)
     , mActionHandler(new MapDocumentActionHandler(this))
     , mLayerDock(new LayerDock(this))
+    , mMapsDock(new MapsDock(this))
     , mObjectsDock(new ObjectsDock())
     , mTilesetDock(new TilesetDock(this))
     , mTerrainDock(new TerrainDock(this))
@@ -170,11 +172,13 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
 
     addDockWidget(Qt::RightDockWidgetArea, mLayerDock);
     addDockWidget(Qt::RightDockWidgetArea, undoDock);
+    addDockWidget(Qt::RightDockWidgetArea, mMapsDock);
     addDockWidget(Qt::RightDockWidgetArea, mObjectsDock);
     addDockWidget(Qt::RightDockWidgetArea, mTerrainDock);
     addDockWidget(Qt::RightDockWidgetArea, mTilesetDock);
     tabifyDockWidget(undoDock, mObjectsDock);
     tabifyDockWidget(mObjectsDock, mLayerDock);
+    tabifyDockWidget(mLayerDock, mMapsDock);
     tabifyDockWidget(mTerrainDock, mTilesetDock);
 
     statusBar()->addPermanentWidget(mZoomComboBox);
@@ -195,6 +199,10 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
     mUi->actionShowGrid->setChecked(preferences->showGrid());
     mUi->actionSnapToGrid->setChecked(preferences->snapToGrid());
     mUi->actionHighlightCurrentLayer->setChecked(preferences->highlightCurrentLayer());
+
+    QShortcut *reloadTilesetsShortcut = new QShortcut(QKeySequence(tr("Ctrl+T")), this);
+    connect(reloadTilesetsShortcut, SIGNAL(activated()),
+            this, SLOT(reloadTilesets()));
 
     // Make sure Ctrl+= also works for zooming in
     QList<QKeySequence> keys = QKeySequence::keyBindings(QKeySequence::ZoomIn);
@@ -340,6 +348,8 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
             CreateObjectTool::CreateTile, this);
     CreateObjectTool *areaObjectsTool = new CreateObjectTool(
             CreateObjectTool::CreateArea, this);
+    CreateObjectTool *ellipseObjectsTool = new CreateObjectTool(
+            CreateObjectTool::CreateEllipse, this);
     CreateObjectTool *polygonObjectsTool = new CreateObjectTool(
             CreateObjectTool::CreatePolygon, this);
     CreateObjectTool *polylineObjectsTool = new CreateObjectTool(
@@ -374,6 +384,7 @@ MainWindow::MainWindow(QWidget *parent, Qt::WFlags flags)
     toolManager->registerTool(new ObjectSelectionTool(this));
     toolManager->registerTool(new EditPolygonTool(this));
     toolManager->registerTool(areaObjectsTool);
+    toolManager->registerTool(ellipseObjectsTool);
     toolManager->registerTool(tileObjectsTool);
     toolManager->registerTool(polygonObjectsTool);
     toolManager->registerTool(polylineObjectsTool);
@@ -1079,6 +1090,17 @@ void MainWindow::newTilesets(const QStringList &paths)
     foreach (const QString &path, paths)
         if (!newTileset(path))
             return;
+}
+
+void MainWindow::reloadTilesets()
+{
+    Map *map = mMapDocument->map();
+    if (!map)
+        return;
+
+    TilesetManager *tilesetManager = TilesetManager::instance();
+    foreach (Tileset *tileset, map->tilesets())
+        tilesetManager->forceTilesetReload(tileset);
 }
 
 void MainWindow::addExternalTileset()
