@@ -317,16 +317,20 @@ void IsometricRenderer::drawMapObject(QPainter *painter,
         if (!name.isEmpty())
             painter->drawText(QPoint(paintOrigin.x(), paintOrigin.y() - 5 + 1), name);
 
-        pen.setStyle(Qt::SolidLine);
-        painter->setPen(pen);
-        painter->drawRect(QRectF(paintOrigin, img.size()));
-        pen.setStyle(Qt::DotLine);
-        pen.setColor(color);
-        painter->setPen(pen);
-        painter->drawRect(QRectF(paintOrigin, img.size()));
+        if (testFlag(ShowTileObjectOutlines)) {
+            pen.setStyle(Qt::SolidLine);
+            painter->setPen(pen);
+            painter->drawRect(QRectF(paintOrigin, img.size()));
+            pen.setStyle(Qt::DotLine);
+            pen.setColor(color);
+            painter->setPen(pen);
+            painter->drawRect(QRectF(paintOrigin, img.size()));
+        }
 
-        if (!name.isEmpty())
+        if (!name.isEmpty()) {
+            painter->setPen(color);
             painter->drawText(QPoint(paintOrigin.x(), paintOrigin.y() - 5), name);
+        }
 
     } else {
         QColor brushColor = color;
@@ -344,7 +348,72 @@ void IsometricRenderer::drawMapObject(QPainter *painter,
         // TODO: Do something sensible to make null-sized objects usable
 
         switch (object->shape()) {
-        case MapObject::Ellipse:
+        case MapObject::Ellipse: {
+            QPointF topLeft(tileToPixelCoords(object->bounds().topLeft()));
+            QPointF bottomLeft(tileToPixelCoords(object->bounds().bottomLeft()));
+            QPointF topRight(tileToPixelCoords(object->bounds().topRight()));
+
+            const qreal headerX = bottomLeft.x();
+            const qreal headerY = topLeft.y();
+
+            QRectF rect(bottomLeft, topRight);
+
+            const QFontMetrics fm = painter->fontMetrics();
+            QString name = fm.elidedText(object->name(), Qt::ElideRight,
+                                         rect.width() + 2);
+
+            QPolygonF polygon = tileRectToPolygon(object->bounds());
+
+            float tw = map()->tileWidth();
+            float th = map()->tileHeight();
+            QPointF transformScale(1, 1);
+            if (tw > th)
+                transformScale = QPointF(1, th/tw);
+            else
+                transformScale = QPointF(tw/th, 1);
+
+            QPointF l1 = polygon.at(1) - polygon.at(0);
+            QPointF l2 = polygon.at(3) - polygon.at(0);
+            QTransform trans;
+            trans.scale(transformScale.x(), transformScale.y());
+            trans.rotate(45);
+            QTransform iTrans = trans.inverted();
+            QPointF l1x = iTrans.map(l1);
+            QPointF l2x = iTrans.map(l2);
+            QSizeF ellipseSize(l1x.manhattanLength(), l2x.manhattanLength());
+
+            painter->save();
+            painter->setPen(pen);
+            painter->translate(polygon.at(0));
+            painter->scale(transformScale.x(), transformScale.y());
+            painter->rotate(45);
+            painter->drawEllipse(QRectF(QPointF(0, 0), ellipseSize));
+            painter->restore();
+
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPolygon(polygon);
+
+            if (!name.isEmpty())
+                painter->drawText(QPoint(headerX, headerY - 5), name);
+
+            pen.setColor(color);
+            painter->setPen(pen);
+            painter->setBrush(Qt::NoBrush);
+            painter->translate(QPointF(0, -1));
+            painter->drawPolygon(polygon);
+
+            painter->setBrush(brush);
+            painter->save();
+            painter->translate(polygon.at(0));
+            painter->scale(transformScale.x(), transformScale.y());
+            painter->rotate(45);
+            painter->drawEllipse(QRectF(QPointF(0, 0), ellipseSize));
+            painter->restore();
+
+            if (!name.isEmpty())
+                painter->drawText(QPoint(headerX, headerY - 5), name);
+            break;
+        }
         case MapObject::Rectangle: {
 
             QPointF topLeft(tileToPixelCoords(object->bounds().topLeft()));
