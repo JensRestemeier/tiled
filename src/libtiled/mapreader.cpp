@@ -243,7 +243,7 @@ Map *MapReaderPrivate::readMap()
             mMap->addLayer(readObjectGroup());
         else if (xml.name() == QLatin1String("imagelayer"))
             mMap->addLayer(readImageLayer());
-        else if (xml.name() == "colour")
+        else if (xml.name() == QLatin1String("colour"))
             mMap->addLayer(readColourLayer());
         else
             readUnknownElement();
@@ -955,7 +955,7 @@ Tileset *MapReader::readExternalTileset(const QString &source,
 
 ColourLayer *MapReaderPrivate::readColourLayer()
 {
-    Q_ASSERT(xml.isStartElement() && xml.name() == "colour");
+    Q_ASSERT(xml.isStartElement() && xml.name() == QLatin1String("colour"));
 
     const QXmlStreamAttributes atts = xml.attributes();
     const QString name = atts.value(QLatin1String("name")).toString();
@@ -968,9 +968,9 @@ ColourLayer *MapReaderPrivate::readColourLayer()
     readLayerAttributes(colourLayer, atts);
 
     while (xml.readNextStartElement()) {
-        if (xml.name() == "properties")
+        if (xml.name() == QLatin1String("properties"))
             colourLayer->mergeProperties(readProperties());
-        else if (xml.name() == "data")
+        else if (xml.name() == QLatin1String("data"))
             readColourLayerData(colourLayer);
         else
             readUnknownElement();
@@ -981,7 +981,7 @@ ColourLayer *MapReaderPrivate::readColourLayer()
 
 void MapReaderPrivate::readColourLayerData(ColourLayer *colourLayer)
 {
-    Q_ASSERT(xml.isStartElement() && xml.name() == "data");
+    Q_ASSERT(xml.isStartElement() && xml.name() == QLatin1String("data"));
 
     const QXmlStreamAttributes atts = xml.attributes();
     QStringRef encoding = atts.value(QLatin1String("encoding"));
