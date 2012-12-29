@@ -28,3 +28,6 @@ automappingconverter.exe
 *.intermediate.manifest
 
 tests/test_mapreader
+
+# MacOS extended attributes
+.DS_Store
