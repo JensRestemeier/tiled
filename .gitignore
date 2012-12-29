@@ -31,3 +31,6 @@ tests/test_mapreader
 
 # MacOS extended attributes
 .DS_Store
+
+# Build artefacts on MacOS
+*.app
