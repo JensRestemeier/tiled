@@ -25,10 +25,100 @@
 #include "layer.h"
 #include "renamelayer.h"
 #include "tilelayer.h"
+#include "undocommands.h"
 
+#include <QCoreApplication>
 
 using namespace Tiled;
 using namespace Tiled::Internal;
+
+namespace {
+
+/**
+ * Used for changing layer visibility.
+ */
+class SetLayerVisible : public QUndoCommand
+{
+public:
+    SetLayerVisible(MapDocument *mapDocument,
+                    int layerIndex,
+                    bool visible)
+        : mMapDocument(mapDocument)
+        , mLayerIndex(layerIndex)
+        , mVisible(visible)
+    {
+        if (visible)
+            setText(QCoreApplication::translate("Undo Commands",
+                                                "Show Layer"));
+        else
+            setText(QCoreApplication::translate("Undo Commands",
+                                                "Hide Layer"));
+    }
+
+    void undo() { swap(); }
+    void redo() { swap(); }
+
+private:
+    void swap()
+    {
+        const Layer *layer = mMapDocument->map()->layerAt(mLayerIndex);
+        const bool previousVisible = layer->isVisible();
+        mMapDocument->layerModel()->setLayerVisible(mLayerIndex, mVisible);
+        mVisible = previousVisible;
+    }
+
+    MapDocument *mMapDocument;
+    int mLayerIndex;
+    bool mVisible;
+};
+
+/**
+ * Used for changing layer opacity.
+ */
+class SetLayerOpacity : public QUndoCommand
+{
+public:
+    SetLayerOpacity(MapDocument *mapDocument,
+                    int layerIndex,
+                    float opacity)
+        : mMapDocument(mapDocument)
+        , mLayerIndex(layerIndex)
+        , mOldOpacity(mMapDocument->map()->layerAt(layerIndex)->opacity())
+        , mNewOpacity(opacity)
+    {
+        setText(QCoreApplication::translate("Undo Commands",
+                                            "Change Layer Opacity"));
+    }
+
+    void undo() { setOpacity(mOldOpacity); }
+    void redo() { setOpacity(mNewOpacity); }
+
+    int id() const { return Cmd_ChangeLayerOpacity; }
+
+    bool mergeWith(const QUndoCommand *other)
+    {
+        const SetLayerOpacity *o = static_cast<const SetLayerOpacity*>(other);
+        if (!(mMapDocument == o->mMapDocument &&
+              mLayerIndex == o->mLayerIndex))
+            return false;
+
+        mNewOpacity = o->mNewOpacity;
+        return true;
+    }
+
+private:
+    void setOpacity(float opacity)
+    {
+        mMapDocument->layerModel()->setLayerOpacity(mLayerIndex, opacity);
+    }
+
+    MapDocument *mMapDocument;
+    int mLayerIndex;
+    float mOldOpacity;
+    float mNewOpacity;
+};
+
+} // anonymous namespace
 
 LayerModel::LayerModel(QObject *parent):
     QAbstractListModel(parent),
@@ -59,16 +149,16 @@ QVariant LayerModel::data(const QModelIndex &index, int role) const
     case Qt::EditRole:
         return layer->name();
     case Qt::DecorationRole:
-        if (layer->isTileLayer())
+        switch (layer->type()) {
+        case Layer::TileLayerType:
             return mTileLayerIcon;
-        else if (layer->isObjectGroup())
+        case Layer::ObjectGroupType:
             return mObjectGroupIcon;
-        else if (layer->isImageLayer())
+        case Layer::ImageLayerType:
             return mImageLayerIcon;
-        else if (layer->isColourLayer())
+        case Layer::ColourLayerType:
             return mColourLayerIcon;
-        else
-            Q_ASSERT(false);
+        }
     case Qt::CheckStateRole:
         return layer->isVisible() ? Qt::Checked : Qt::Unchecked;
     case OpacityRole:
@@ -89,24 +179,31 @@ bool LayerModel::setData(const QModelIndex &index, const QVariant &value,
 
     if (role == Qt::CheckStateRole) {
         Qt::CheckState c = static_cast<Qt::CheckState>(value.toInt());
-        layer->setVisible(c == Qt::Checked);
-        emit dataChanged(index, index);
-        emit layerChanged(layerIndex);
+        const bool visible = (c == Qt::Checked);
+        if (visible != layer->isVisible()) {
+            QUndoCommand *command = new SetLayerVisible(mMapDocument,
+                                                        layerIndex,
+                                                        visible);
+            mMapDocument->undoStack()->push(command);
+        }
         return true;
     } else if (role == OpacityRole) {
         bool ok;
         const qreal opacity = value.toDouble(&ok);
         if (ok) {
             if (layer->opacity() != opacity) {
-                layer->setOpacity(opacity);
-                emit layerChanged(layerIndex);
+                QUndoCommand *command = new SetLayerOpacity(mMapDocument,
+                                                            layerIndex,
+                                                            opacity);
+                mMapDocument->undoStack()->push(command);
             }
+            return true;
         }
     } else if (role == Qt::EditRole) {
         const QString newName = value.toString();
         if (layer->name() != newName) {
             RenameLayer *rename = new RenameLayer(mMapDocument, layerIndex,
-                                                  value.toString());
+                                                  newName);
             mMapDocument->undoStack()->push(rename);
         }
         return true;
@@ -153,9 +250,10 @@ void LayerModel::setMapDocument(MapDocument *mapDocument)
     if (mMapDocument == mapDocument)
         return;
 
+    beginResetModel();
     mMapDocument = mapDocument;
     mMap = mMapDocument->map();
-    reset();
+    endResetModel();
 }
 
 void LayerModel::insertLayer(int index, Layer *layer)
@@ -176,6 +274,22 @@ Layer *LayerModel::takeLayerAt(int index)
     endRemoveRows();
     emit layerRemoved(index);
     return layer;
+}
+
+void LayerModel::setLayerVisible(int layerIndex, bool visible)
+{
+    const QModelIndex modelIndex = index(layerIndexToRow(layerIndex), 0);
+    Layer *layer = mMap->layerAt(layerIndex);
+    layer->setVisible(visible);
+    emit dataChanged(modelIndex, modelIndex);
+    emit layerChanged(layerIndex);
+}
+
+void LayerModel::setLayerOpacity(int layerIndex, float opacity)
+{
+    Layer *layer = mMap->layerAt(layerIndex);
+    layer->setOpacity(opacity);
+    emit layerChanged(layerIndex);
 }
 
 void LayerModel::renameLayer(int layerIndex, const QString &name)

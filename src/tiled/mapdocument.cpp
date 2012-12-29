@@ -38,9 +38,12 @@
 #include "offsetlayer.h"
 #include "orthogonalrenderer.h"
 #include "painttilelayer.h"
+#include "pluginmanager.h"
 #include "resizelayer.h"
 #include "resizemap.h"
 #include "staggeredrenderer.h"
+#include "terrain.h"
+#include "terrainmodel.h"
 #include "tile.h"
 #include "tilelayer.h"
 #include "tilesetmanager.h"
@@ -59,6 +62,7 @@ MapDocument::MapDocument(Map *map, const QString &fileName):
     mMap(map),
     mLayerModel(new LayerModel(this)),
     mMapObjectModel(new MapObjectModel(this)),
+    mTerrainModel(new TerrainModel(this, this)),
     mUndoStack(new QUndoStack(this))
 {
     switch (map->orientation()) {
@@ -118,11 +122,19 @@ bool MapDocument::save(QString *error)
 
 bool MapDocument::save(const QString &fileName, QString *error)
 {
-    TmxMapWriter mapWriter;
+    PluginManager *pm = PluginManager::instance();
 
-    if (!mapWriter.write(map(), fileName)) {
+    MapWriterInterface *chosenWriter = 0;
+    if (const Plugin *plugin = pm->pluginByFileName(mWriterPluginFileName))
+        chosenWriter = qobject_cast<MapWriterInterface*>(plugin->instance);
+
+    TmxMapWriter mapWriter;
+    if (!chosenWriter)
+        chosenWriter = &mapWriter;
+
+    if (!chosenWriter->write(map(), fileName)) {
         if (error)
-            *error = mapWriter.errorString();
+            *error = chosenWriter->errorString();
         return false;
     }
 
@@ -483,6 +495,12 @@ void MapDocument::emitRegionChanged(const QRegion &region)
 void MapDocument::emitRegionEdited(const QRegion &region, Layer *layer)
 {
     emit regionEdited(region, layer);
+}
+
+void MapDocument::emitTileTerrainChanged(const QList<Tile *> &tiles)
+{
+    if (!tiles.isEmpty())
+        emit tileTerrainChanged(tiles);
 }
 
 /**

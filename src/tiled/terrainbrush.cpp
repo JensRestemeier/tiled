@@ -46,9 +46,10 @@ TerrainBrush::TerrainBrush(QObject *parent)
                                ":images/24x24/terrain-edit.png")),
                        QKeySequence(tr("T")),
                        parent)
-    , mTerrain(NULL)
+    , mTerrain(0)
     , mPaintX(0), mPaintY(0)
     , mOffsetX(0), mOffsetY(0)
+    , mIsActive(false)
     , mBrushBehavior(Free)
     , mLineReferenceX(0)
     , mLineReferenceY(0)
@@ -60,11 +61,22 @@ TerrainBrush::~TerrainBrush()
 {
 }
 
+void TerrainBrush::activate(MapScene *scene)
+{
+    AbstractTileTool::activate(scene);
+    mIsActive = true;
+}
+
+void TerrainBrush::deactivate(MapScene *scene)
+{
+    AbstractTileTool::deactivate(scene);
+    mIsActive = false;
+}
+
 void TerrainBrush::tilePositionChanged(const QPoint &pos)
 {
     switch (mBrushBehavior) {
-    case Paint:
-    {
+    case Paint: {
         int x = mPaintX;
         int y = mPaintY;
         foreach (const QPoint &p, pointsOnLine(x, y, pos.x(), pos.y())) {
@@ -76,8 +88,7 @@ void TerrainBrush::tilePositionChanged(const QPoint &pos)
         mPaintY = pos.y();
         break;
     }
-    case LineStartSet:
-    {
+    case LineStartSet: {
         QVector<QPoint> lineList = pointsOnLine(mLineReferenceX, mLineReferenceY,
                                                 pos.x(), pos.y());
         updateBrush(pos, &lineList);
@@ -135,10 +146,11 @@ void TerrainBrush::mouseReleased(QGraphicsSceneMouseEvent *event)
 
 void TerrainBrush::modifiersChanged(Qt::KeyboardModifiers modifiers)
 {
-    if (modifiers & Qt::ShiftModifier) {
-        mBrushBehavior = Line;
-    } else {
-        mBrushBehavior = Free;
+    const bool lineMode = modifiers & Qt::ShiftModifier;
+
+    if (lineMode != (mBrushBehavior == Line ||
+                     mBrushBehavior == LineStartSet)) {
+        mBrushBehavior = lineMode ? Line : Free;
     }
 
     setBrushMode((modifiers & Qt::ControlModifier) ? PaintVertex : PaintTile);
@@ -182,7 +194,8 @@ void TerrainBrush::setTerrain(const Terrain *terrain)
 
     mTerrain = terrain;
 
-    updateBrush(tilePosition());
+    if (mIsActive && brushItem()->isVisible())
+        updateBrush(tilePosition());
 }
 
 void TerrainBrush::beginPaint()
@@ -202,6 +215,9 @@ void TerrainBrush::capture()
     // TODO: we need to know which corner the mouse is closest to...
 
     const Cell &cell = tileLayer->cellAt(tilePosition());
+    if (!cell.tile)
+        return;
+
     Terrain *t = cell.tile->terrainAtCorner(0);
     setTerrain(t);
 }

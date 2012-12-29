@@ -29,7 +29,6 @@
 
 #include "tilelayer.h"
 
-#include "layer.h"
 #include "map.h"
 #include "tile.h"
 #include "tileset.h"
@@ -89,15 +88,14 @@ void TileLayer::setCell(int x, int y, const Cell &cell)
     Q_ASSERT(contains(x, y));
 
     if (cell.tile) {
-        int width = cell.tile->width();
-        int height = cell.tile->height();
+        QSize size = cell.tile->size();
 
         if (cell.flippedAntiDiagonally)
-            std::swap(width, height);
+            size.transpose();
 
         const QPoint offset = cell.tile->tileset()->tileOffset();
 
-        mMaxTileSize = maxSize(QSize(width, height), mMaxTileSize);
+        mMaxTileSize = maxSize(size, mMaxTileSize);
         mOffsetMargins = maxMargins(QMargins(-offset.x(),
                                              -offset.y(),
                                              offset.x(),
@@ -297,6 +295,9 @@ void TileLayer::replaceReferencesToTileset(Tileset *oldTileset,
 
 void TileLayer::resize(const QSize &size, const QPoint &offset)
 {
+    if (this->size() == size && offset.isNull())
+        return;
+
     QVector<Cell> newGrid(size.width() * size.height());
 
     // Copy over the preserved part

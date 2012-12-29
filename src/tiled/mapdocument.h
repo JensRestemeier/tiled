@@ -40,13 +40,16 @@ namespace Tiled {
 class Map;
 class MapObject;
 class MapRenderer;
+class Terrain;
+class Tile;
 class Tileset;
 
 namespace Internal {
 
 class LayerModel;
-class TileSelectionModel;
 class MapObjectModel;
+class TerrainModel;
+class TileSelectionModel;
 
 /**
  * Represents an editable map. The purpose of this class is to make sure that
@@ -85,13 +88,18 @@ public:
      * file was saved successfully. If not, <i>error</i> will be set to the
      * error message if it is not 0.
      *
-     * If the save was succesful, the file name of this document will be set
+     * If the save was successful, the file name of this document will be set
      * to \a fileName.
+     *
+     * The map format will be the same as this map was opened with.
      */
     bool save(const QString &fileName, QString *error = 0);
 
     QString fileName() const { return mFileName; }
-    void setFileName(const QString &fileName);
+
+    QString writerPluginFileName() const { return mWriterPluginFileName; }
+    void setWriterPluginFileName(const QString &writerPluginFileName)
+    { mWriterPluginFileName = writerPluginFileName; }
 
     QString displayName() const;
 
@@ -158,6 +166,8 @@ public:
 
     MapObjectModel *mapObjectModel() const { return mMapObjectModel; }
 
+    TerrainModel *terrainModel() const { return mTerrainModel; }
+
     /**
      * Returns the map renderer.
      */
@@ -220,6 +230,12 @@ public:
     void emitRegionEdited(const QRegion &region, Layer *layer);
 
     /**
+     * Emits the signal notifying tileset models about changes to tile terrain
+     * information. All the \a tiles need to be from the same tileset.
+     */
+    void emitTileTerrainChanged(const QList<Tile*> &tiles);
+
+    /**
      * Emits the editLayerNameRequested signal, to get renamed.
      */
     inline void emitEditLayerNameRequested()
@@ -276,6 +292,12 @@ signals:
      */
     void regionEdited(const QRegion &region, Layer *layer);
 
+    /**
+     * Emitted when the terrain information for the given list of tiles was
+     * changed. All the tiles are guaranteed to be from the same tileset.
+     */
+    void tileTerrainChanged(const QList<Tile*> &tiles);
+
     void tilesetAdded(int index, Tileset *tileset);
     void tilesetRemoved(Tileset *tileset);
     void tilesetMoved(int from, int to);
@@ -295,9 +317,19 @@ private slots:
     void onLayerRemoved(int index);
 
 private:
+    void setFileName(const QString &fileName);
     void deselectObjects(const QList<MapObject*> &objects);
 
     QString mFileName;
+
+    /*
+     * The filename of a plugin is unique. So it can be used to determine
+     * the right plugin to be used for saving the map again.
+     * The nameFilter of a plugin can not be used, since it's translatable.
+     * The filename of a plugin must not change while maps are open using this
+     * plugin.
+     */
+    QString mWriterPluginFileName;
     Map *mMap;
     LayerModel *mLayerModel;
     QRegion mTileSelection;
@@ -305,6 +337,7 @@ private:
     MapRenderer *mRenderer;
     int mCurrentLayerIndex;
     MapObjectModel *mMapObjectModel;
+    TerrainModel *mTerrainModel;
     QUndoStack *mUndoStack;
 };
 

@@ -57,9 +57,10 @@ public:
         TileLayerType   = 0x01,
         ObjectGroupType = 0x02,
         ImageLayerType  = 0x04,
-        ColourLayerType = 0x08,
-        AnyLayerType    = 0xFF
+        ColourLayerType = 0x08
     };
+
+    enum { AnyLayerType = 0xFF };
 
     /**
      * Constructor.
@@ -153,6 +154,11 @@ public:
      * Returns the height of this layer.
      */
     int height() const { return mHeight; }
+
+    /**
+     * Returns the size of this layer.
+     */
+    QSize size() const { return QSize(mWidth, mHeight); }
 
     /**
      * Returns the bounds of this layer.

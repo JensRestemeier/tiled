@@ -260,7 +260,7 @@ void ObjectsDock::objectProperties()
     const QList<MapObject *> &selectedObjects = mMapDocument->selectedObjects();
 
     MapObject *mapObject = selectedObjects.first();
-    ObjectPropertiesDialog propertiesDialog(mMapDocument, mapObject, 0);
+    ObjectPropertiesDialog propertiesDialog(mMapDocument, mapObject, this);
     propertiesDialog.exec();
 }
 
@@ -330,7 +330,13 @@ void ObjectsView::setMapDocument(MapDocument *mapDoc)
         mMapObjectModel = mMapDocument->mapObjectModel();
         setModel(mMapObjectModel);
         model()->setMapDocument(mapDoc);
-        header()->setResizeMode(0, QHeaderView::Stretch); // 2 equal-sized columns, user can't adjust
+
+        // 2 equal-sized columns, user can't adjust
+#if QT_VERSION >= 0x050000
+        header()->setSectionResizeMode(0, QHeaderView::Stretch);
+#else
+        header()->setResizeMode(0, QHeaderView::Stretch);
+#endif
 
         connect(mMapDocument, SIGNAL(selectedObjectsChanged()),
                 this, SLOT(selectedObjectsChanged()));
@@ -344,8 +350,10 @@ void ObjectsView::setMapDocument(MapDocument *mapDoc)
 
 void ObjectsView::onActivated(const QModelIndex &index)
 {
-    Q_UNUSED(index)
-    // show object properties, center in view
+    if (MapObject *mapObject = model()->toMapObject(index)) {
+        ObjectPropertiesDialog propertiesDialog(mMapDocument, mapObject, this);
+        propertiesDialog.exec();
+    }
 }
 
 void ObjectsView::selectionChanged(const QItemSelection &selected,

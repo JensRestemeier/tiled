@@ -24,6 +24,7 @@
 #define TILESETDOCK_H
 
 #include <QDockWidget>
+#include <QList>
 #include <QMap>
 
 class QComboBox;
@@ -37,6 +38,7 @@ class QMenu;
 
 namespace Tiled {
 
+class Terrain;
 class Tile;
 class TileLayer;
 class Tileset;
@@ -96,9 +98,10 @@ protected:
     void dropEvent(QDropEvent *);
 
 private slots:
-    void insertTilesetView(int index, Tileset *tileset);
     void updateActions();
     void updateCurrentTiles();
+
+    void tilesetAdded(int index, Tileset *tileset);
     void tilesetChanged(Tileset *tileset);
     void tilesetRemoved(Tileset *tileset);
     void tilesetMoved(int from, int to);
@@ -114,6 +117,8 @@ private slots:
 
     void renameTileset();
 
+    void editTerrain();
+
     void documentCloseRequested(int index);
 
     void refreshTilesetMenu();
@@ -124,20 +129,24 @@ private:
     void retranslateUi();
 
     Tileset *currentTileset() const;
+    TilesetView *currentTilesetView() const;
     TilesetView *tilesetViewAt(int index) const;
 
     MapDocument *mMapDocument;
+    QList<Tileset*> mTilesets;
     QTabBar *mTabBar;
     QStackedWidget *mViewStack;
     QToolBar *mToolBar;
     Tile *mCurrentTile;
     TileLayer *mCurrentTiles;
+    const Terrain *mTerrain;
 
     QAction *mImportTileset;
     QAction *mExportTileset;
     QAction *mPropertiesTileset;
     QAction *mDeleteTileset;
     QAction *mRenameTileset;
+    QAction *mEditTerrain;
 
     QMap<MapDocument *, QString> mCurrentTilesets;
 

@@ -62,6 +62,7 @@ class CommandButton;
 class ObjectsDock;
 class Zoomable;
 class ColourBrush;
+class MiniMapDock;
 
 /**
  * The main editor window.
@@ -74,7 +75,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = 0, Qt::WFlags flags = 0);
+    MainWindow(QWidget *parent = 0, Qt::WindowFlags flags = 0);
     ~MainWindow();
 
     void commitData(QSessionManager &manager);
@@ -218,6 +219,7 @@ private:
     ObjectsDock *mObjectsDock;
     TilesetDock *mTilesetDock;
     TerrainDock *mTerrainDock;
+    MiniMapDock* mMiniMapDock;
     QLabel *mCurrentLayerLabel;
     Zoomable *mZoomable;
     QComboBox *mZoomComboBox;

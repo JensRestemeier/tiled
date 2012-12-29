@@ -332,9 +332,6 @@ Tileset *MapReaderPrivate::readTileset()
     if (tileset && !mReadingExternalTileset)
         mGidMapper.insert(firstGid, tileset);
 
-    if (tileset)
-        tileset->calculateTerrainDistances();
-
     return tileset;
 }
 
@@ -454,27 +451,18 @@ void MapReaderPrivate::readTilesetTerrainTypes(Tileset *tileset)
             const QXmlStreamAttributes atts = xml.attributes();
             QString name = atts.value(QLatin1String("name")).toString();
             int tile = atts.value(QLatin1String("tile")).toString().toInt();
-//            int tile = atts.value(QLatin1String("color")).toString().toInt();
 
-            Terrain *terrain = new Terrain(tileset->terrainCount(), tileset, name, tile);
+            Terrain *terrain = tileset->addTerrain(name, tile);
 
-            QString distances = atts.value(QLatin1String("distances")).toString();
-            if (!distances.isEmpty()) {
-                QStringList distStrings = distances.split(QLatin1Char(','));
-                QVector<int> dist(distStrings.size(), -1);
-                for (int i = 0; i < distStrings.size(); ++i) {
-                    if (!distStrings[i].isEmpty())
-                        dist[i] = distStrings[i].toInt();
-                }
-                terrain->setTransitionDistances(dist);
+            while (xml.readNextStartElement()) {
+                if (xml.name() == QLatin1String("properties"))
+                    terrain->mergeProperties(readProperties());
+                else
+                    readUnknownElement();
             }
-
-            tileset->addTerrain(terrain);
-
-            xml.skipCurrentElement();
-        }
-        else
+        } else {
             readUnknownElement();
+        }
     }
 }
 
@@ -527,6 +515,23 @@ void MapReaderPrivate::readLayerData(TileLayer *tileLayer)
     const QXmlStreamAttributes atts = xml.attributes();
     QStringRef encoding = atts.value(QLatin1String("encoding"));
     QStringRef compression = atts.value(QLatin1String("compression"));
+
+    bool respect = true; // TODO: init from preferences
+    if (respect) {
+        if (encoding.isEmpty())
+            mMap->setLayerDataFormat(Map::XML);
+        else if (encoding == QLatin1String("csv"))
+            mMap->setLayerDataFormat(Map::CSV);
+        else if (encoding == QLatin1String("base64")) {
+            if (compression.isEmpty())
+                mMap->setLayerDataFormat(Map::Base64);
+            else if (compression == QLatin1String("gzip"))
+                mMap->setLayerDataFormat(Map::Base64Gzip);
+            else if (compression == QLatin1String("zlib"))
+                mMap->setLayerDataFormat(Map::Base64Zlib);
+        }
+        // else, error handled below
+    }
 
     int x = 0;
     int y = 0;

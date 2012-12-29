@@ -24,8 +24,9 @@ DEFINES += QT_NO_CAST_FROM_ASCII \
     QT_NO_CAST_TO_ASCII
 DEFINES += TILED_LIBRARY
 contains(QT_CONFIG, reduce_exports): CONFIG += hide_symbols
-OBJECTS_DIR = .obj
+
 SOURCES += compression.cpp \
+    gidmapper.cpp \
     imagelayer.cpp \
     isometricrenderer.cpp \
     layer.cpp \
@@ -38,11 +39,12 @@ SOURCES += compression.cpp \
     orthogonalrenderer.cpp \
     properties.cpp \
     staggeredrenderer.cpp \
+    tile.cpp \
     tilelayer.cpp \
     tileset.cpp \
-    gidmapper.cpp \
     colourlayer.cpp
 HEADERS += compression.h \
+    gidmapper.h \
     imagelayer.h \
     isometricrenderer.h \
     layer.h \
@@ -58,17 +60,18 @@ HEADERS += compression.h \
     orthogonalrenderer.h \
     properties.h \
     staggeredrenderer.h \
+    terrain.h \
     tile.h \
     tiled_global.h \
     tilelayer.h \
     tileset.h \
-    gidmapper.h \
-    terrain.h \
     colourlayer.h
 
-headers.files = $${HEADERS}
-headers.path = $${PREFIX}/include/tiled
-INSTALLS += headers
+contains(INSTALL_HEADERS, yes) {
+    headers.files = $${HEADERS}
+    headers.path = $${PREFIX}/include/tiled
+    INSTALLS += headers
+}
 
 macx {
     contains(QT_CONFIG, ppc):CONFIG += x86 \
