@@ -1,6 +1,6 @@
 /*
  * mapscene.h
- * Copyright 2008-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2008-2013, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2008, Roderic Morris <roderic@ccs.neu.edu>
  * Copyright 2009, Edward Hutchins <eah1@yahoo.com>
  * Copyright 2010, Jeff Bland <jksb@member.fsf.org>
@@ -31,6 +31,7 @@
 
 namespace Tiled {
 
+class ImageLayer;
 class Layer;
 class MapObject;
 class Tileset;
@@ -120,6 +121,7 @@ protected:
      */
     bool event(QEvent *event);
 
+    void keyPressEvent(QKeyEvent *event);
     void mouseMoveEvent(QGraphicsSceneMouseEvent *mouseEvent);
     void mousePressEvent(QGraphicsSceneMouseEvent *mouseEvent);
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *mouseEvent);
@@ -157,6 +159,8 @@ private slots:
     void layerAdded(int index);
     void layerRemoved(int index);
     void layerChanged(int index);
+
+    void imageLayerChanged(ImageLayer *imageLayer);
 
     void objectsAdded(const QList<MapObject*> &objects);
     void objectsRemoved(const QList<MapObject*> &objects);

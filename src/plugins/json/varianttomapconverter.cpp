@@ -58,6 +58,10 @@ Map *VariantToMapConverter::toMap(const QVariant &variant,
 
     mMap->setProperties(toProperties(variantMap["properties"]));
 
+    const QString bgColor = variantMap["backgroundcolor"].toString();
+    if (!bgColor.isEmpty() && QColor::isValidColor(bgColor))
+        mMap->setBackgroundColor(QColor(bgColor));
+
     foreach (const QVariant &tilesetVariant, variantMap["tilesets"].toList()) {
         Tileset *tileset = toTileset(tilesetVariant);
         if (!tileset) {
@@ -116,16 +120,13 @@ Tileset *VariantToMapConverter::toTileset(const QVariant &variant)
     tileset->setTileOffset(QPoint(tileOffsetX, tileOffsetY));
 
     const QString trans = variantMap["transparentcolor"].toString();
-    if (!trans.isEmpty())
-#if QT_VERSION >= 0x040700
-        if (QColor::isValidColor(trans))
-#endif
-            tileset->setTransparentColor(QColor(trans));
+    if (!trans.isEmpty() && QColor::isValidColor(trans))
+        tileset->setTransparentColor(QColor(trans));
 
     QString imageSource = variantMap["image"].toString();
 
     if (QDir::isRelativePath(imageSource))
-        imageSource = mMapDir.path() + QLatin1Char('/') + imageSource;
+        imageSource = QDir::cleanPath(mMapDir.absoluteFilePath(imageSource));
 
     if (!tileset->loadFromImage(QImage(imageSource), imageSource)) {
         mError = tr("Error loading tileset image:\n'%1'").arg(imageSource);
@@ -143,6 +144,36 @@ Tileset *VariantToMapConverter::toTileset(const QVariant &variant)
         if (tileIndex >= 0 && tileIndex < tileset->tileCount()) {
             const Properties properties = toProperties(propertiesVar);
             tileset->tileAt(tileIndex)->setProperties(properties);
+        }
+    }
+
+    // Read terrains
+    QVariantList terrainsVariantList = variantMap["terrains"].toList();
+    for (int i = 0; i < terrainsVariantList.count(); ++i) {
+        QVariantMap terrainMap = terrainsVariantList[i].toMap();
+        tileset->addTerrain(terrainMap["name"].toString(),
+                            terrainMap["tile"].toInt());
+    }
+
+    // Read tile terrain information
+    const QVariantMap tilesVariantMap = variantMap["tiles"].toMap();
+    for (it = tilesVariantMap.begin(); it != tilesVariantMap.end(); ++it) {
+        bool ok;
+        const int tileIndex = it.key().toInt();
+        Tile *tile = tileset->tileAt(tileIndex);
+        if (tileIndex >= 0 && tileIndex < tileset->tileCount()) {
+            const QVariantMap tileVar = it.value().toMap();
+            QList<QVariant> terrains = tileVar["terrain"].toList();
+            if (terrains.count() == 4) {
+                for (int i = 0; i < 4; ++i) {
+                    int terrainID = terrains.at(i).toInt(&ok);
+                    if (ok && terrainID >= 0 && terrainID < tileset->terrainCount())
+                        tile->setCornerTerrain(i, terrainID);
+                }
+            }
+            float terrainProbability = tileVar["probability"].toFloat(&ok);
+            if (ok)
+                tile->setTerrainProbability(terrainProbability);
         }
     }
 
@@ -196,7 +227,7 @@ TileLayer *VariantToMapConverter::toTileLayer(const QVariantMap &variantMap)
     bool ok;
 
     foreach (const QVariant &gidVariant, dataVariantList) {
-        const uint gid = gidVariant.toUInt(&ok);
+        const unsigned gid = gidVariant.toUInt(&ok);
         if (!ok) {
             mError = tr("Unable to parse tile at (%1,%2) on layer '%3'")
                     .arg(x).arg(y).arg(tileLayer->name());
@@ -275,6 +306,7 @@ ObjectGroup *VariantToMapConverter::toObjectGroup(const QVariantMap &variantMap)
         const int y = objectVariantMap["y"].toInt();
         const int width = objectVariantMap["width"].toInt();
         const int height = objectVariantMap["height"].toInt();
+        const qreal rotation = objectVariantMap["rotation"].toReal();
 
         const QPointF pos = toTile(x, y);
         const QPointF size = toTile(width, height);
@@ -282,11 +314,11 @@ ObjectGroup *VariantToMapConverter::toObjectGroup(const QVariantMap &variantMap)
         MapObject *object = new MapObject(name, type,
                                           pos,
                                           QSizeF(size.x(), size.y()));
+        object->setRotation(rotation);
 
         if (gid) {
             bool ok;
-            const Cell cell = mGidMapper.gidToCell(gid, ok);
-            object->setTile(cell.tile);
+            object->setCell(mGidMapper.gidToCell(gid, ok));
         }
 
         if (objectVariantMap.contains("visible"))
@@ -328,14 +360,15 @@ ImageLayer *VariantToMapConverter::toImageLayer(const QVariantMap &variantMap)
     imageLayer->setVisible(visible);
 
     const QString trans = variantMap["transparentcolor"].toString();
-    if (!trans.isEmpty())
-#if QT_VERSION >= 0x040700
-        if (QColor::isValidColor(trans))
-#endif
-            imageLayer->setTransparentColor(QColor(trans));
+    if (!trans.isEmpty() && QColor::isValidColor(trans))
+        imageLayer->setTransparentColor(QColor(trans));
 
-    const QString imageSource = variantMap["image"].toString();
+    QString imageSource = variantMap["image"].toString();
+
     if (!imageSource.isEmpty()) {
+        if (QDir::isRelativePath(imageSource))
+            imageSource = QDir::cleanPath(mMapDir.absoluteFilePath(imageSource));
+
         if (!imageLayer->loadFromImage(QImage(imageSource), imageSource)) {
             // TODO: This error is currently ignored
             mError = tr("Error loading image:\n'%1'").arg(imageSource);

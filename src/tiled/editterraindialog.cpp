@@ -31,6 +31,7 @@
 #include "utils.h"
 #include "zoomable.h"
 
+#include <QShortcut>
 #include <QUndoStack>
 
 using namespace Tiled;
@@ -81,6 +82,7 @@ EditTerrainDialog::EditTerrainDialog(MapDocument *mapDocument,
     , mTileset(tileset)
 {
     mUi->setupUi(this);
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     Utils::setThemeIcon(mUi->redo, "edit-redo");
     Utils::setThemeIcon(mUi->undo, "edit-undo");
@@ -100,7 +102,6 @@ EditTerrainDialog::EditTerrainDialog(MapDocument *mapDocument,
     mTerrainModel = mapDocument->terrainModel();
     const QModelIndex rootIndex = mTerrainModel->index(tileset);
 
-    mUi->terrainList->setMapDocument(mapDocument);
     mUi->terrainList->setModel(mTerrainModel);
     mUi->terrainList->setRootIndex(rootIndex);
 
@@ -122,14 +123,16 @@ EditTerrainDialog::EditTerrainDialog(MapDocument *mapDocument,
         mUi->terrainList->setFocus();
     }
 
-    connect(mUi->clearTerrain, SIGNAL(toggled(bool)),
-            SLOT(clearTerrainToggled(bool)));
+    connect(mUi->eraseTerrain, SIGNAL(toggled(bool)),
+            SLOT(eraseTerrainToggled(bool)));
 
     connect(mUi->addTerrainTypeButton, SIGNAL(clicked()),
             SLOT(addTerrainType()));
     connect(mUi->removeTerrainTypeButton, SIGNAL(clicked()),
             SLOT(removeTerrainType()));
 
+    connect(mUi->tilesetView, SIGNAL(createNewTerrain(Tile*)),
+            SLOT(addTerrainType(Tile*)));
     connect(mUi->tilesetView, SIGNAL(terrainImageSelected(Tile*)),
             SLOT(setTerrainImage(Tile*)));
 
@@ -141,11 +144,23 @@ EditTerrainDialog::EditTerrainDialog(MapDocument *mapDocument,
     connect(mUi->undo, SIGNAL(clicked()), undoStack, SLOT(undo()));
     connect(mUi->redo, SIGNAL(clicked()), undoStack, SLOT(redo()));
 
+    mUndoShortcut = new QShortcut(QKeySequence::Undo, this);
+    mRedoShortcut = new QShortcut(QKeySequence::Redo, this);
+    connect(mUndoShortcut, SIGNAL(activated()), undoStack, SLOT(undo()));
+    connect(mRedoShortcut, SIGNAL(activated()), undoStack, SLOT(redo()));
+
+    QShortcut *eraseShortcut = new QShortcut(QKeySequence(tr("E")), this);
+    connect(eraseShortcut, SIGNAL(activated()),
+            mUi->eraseTerrain, SLOT(toggle()));
+
     updateUndoButton();
+
+    Utils::restoreGeometry(this);
 }
 
 EditTerrainDialog::~EditTerrainDialog()
 {
+    Utils::saveGeometry(this);
     delete mUi;
 }
 
@@ -155,33 +170,25 @@ void EditTerrainDialog::selectedTerrainChanged(const QModelIndex &index)
     if (Terrain *terrain = mTerrainModel->terrainAt(index))
         terrainId = terrain->id();
 
-    if (!mUi->clearTerrain->isChecked())
-        mUi->tilesetView->setTerrainId(terrainId);
-
+    mUi->tilesetView->setTerrainId(terrainId);
     mUi->removeTerrainTypeButton->setEnabled(terrainId != -1);
 }
 
-void EditTerrainDialog::clearTerrainToggled(bool checked)
+void EditTerrainDialog::eraseTerrainToggled(bool checked)
 {
-    if (checked) {
-        mUi->tilesetView->setTerrainId(-1);
-    } else {
-        const QModelIndex currentIndex = mUi->terrainList->currentIndex();
-        if (Terrain *terrain = mTerrainModel->terrainAt(currentIndex))
-            mUi->tilesetView->setTerrainId(terrain->id());
-    }
+    mUi->tilesetView->setEraseTerrain(checked);
 }
 
-void EditTerrainDialog::addTerrainType()
+void EditTerrainDialog::addTerrainType(Tile *tile)
 {
     Terrain *terrain = new Terrain(mTileset->terrainCount(), mTileset,
-                                   QString(), -1);
+                                   QString(), tile ? tile->id() : -1);
     terrain->setName(tr("New Terrain"));
 
     mMapDocument->undoStack()->push(new AddTerrain(mMapDocument, terrain));
 
     // Select the newly added terrain and edit its name
-    const QModelIndex index = mTerrainModel->index(terrain, 1);
+    const QModelIndex index = mTerrainModel->index(terrain);
     QItemSelectionModel *selectionModel = mUi->terrainList->selectionModel();
     selectionModel->setCurrentIndex(index,
                                     QItemSelectionModel::ClearAndSelect |
@@ -255,8 +262,11 @@ void EditTerrainDialog::setTerrainImage(Tile *tile)
 void EditTerrainDialog::updateUndoButton()
 {
     QUndoStack *undoStack = mMapDocument->undoStack();
-    const int index = undoStack->index();
+    const bool canUndo = undoStack->index() > mInitialUndoStackIndex;
+    const bool canRedo = undoStack->canRedo();
 
-    mUi->undo->setEnabled(index > mInitialUndoStackIndex);
-    mUi->redo->setEnabled(undoStack->canRedo());
+    mUi->undo->setEnabled(canUndo);
+    mUi->redo->setEnabled(canRedo);
+    mUndoShortcut->setEnabled(canUndo);
+    mRedoShortcut->setEnabled(canRedo);
 }

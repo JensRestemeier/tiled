@@ -1,8 +1,5 @@
 build
-bin/automappingconverter
-bin/tiled
-bin/tmxrasterizer
-bin/tmxviewer
+bin
 lib/tiled/plugins/*
 lib/*.so*
 Makefile*
@@ -27,7 +24,13 @@ automappingconverter.exe
 *.exp
 *.intermediate.manifest
 
+# Build artifacts on Mac
+translations/phony_target.app
+
 tests/test_mapreader
+
+# Ronn html outputs
+docs/*.1.html
 
 # MacOS extended attributes
 .DS_Store

@@ -20,16 +20,14 @@
 
 #include "abstractobjecttool.h"
 
-#include "addremovemapobject.h"
 #include "map.h"
 #include "mapdocument.h"
+#include "mapdocumentactionhandler.h"
 #include "mapobject.h"
 #include "mapobjectitem.h"
 #include "maprenderer.h"
 #include "mapscene.h"
-#include "movemapobjecttogroup.h"
 #include "objectgroup.h"
-#include "objectpropertiesdialog.h"
 #include "utils.h"
 
 #include <QMenu>
@@ -77,7 +75,7 @@ void AbstractObjectTool::mousePressed(QGraphicsSceneMouseEvent *event)
 {
     if (event->button() == Qt::RightButton) {
         showContextMenu(topMostObjectItemAt(event->scenePos()),
-                        event->screenPos(), event->widget());
+                        event->screenPos());
     }
 }
 
@@ -103,12 +101,22 @@ MapObjectItem *AbstractObjectTool::topMostObjectItemAt(QPointF pos) const
     return 0;
 }
 
+void AbstractObjectTool::flipHorizontally()
+{
+    mapDocument()->flipSelectedObjects(FlipHorizontally);
+}
+
+void AbstractObjectTool::flipVertically()
+{
+    mapDocument()->flipSelectedObjects(FlipVertically);
+}
+
 /**
  * Shows the context menu for map objects. The menu allows you to duplicate and
  * remove the map objects, or to edit their properties.
  */
 void AbstractObjectTool::showContextMenu(MapObjectItem *clickedObjectItem,
-                                         QPoint screenPos, QWidget *parent)
+                                         QPoint screenPos)
 {
     QSet<MapObjectItem *> selection = mMapScene->selectedObjectItems();
     if (clickedObjectItem && !selection.contains(clickedObjectItem)) {
@@ -119,7 +127,7 @@ void AbstractObjectTool::showContextMenu(MapObjectItem *clickedObjectItem,
     if (selection.isEmpty())
         return;
 
-    const QList<MapObject*> selectedObjects = mapDocument()->selectedObjects();
+    const QList<MapObject*> &selectedObjects = mapDocument()->selectedObjects();
 
     QList<ObjectGroup*> objectGroups;
     foreach (Layer *layer, mapDocument()->map()->layers()) {
@@ -127,17 +135,17 @@ void AbstractObjectTool::showContextMenu(MapObjectItem *clickedObjectItem,
             objectGroups.append(objectGroup);
     }
 
-    QMenu menu;
-    QIcon dupIcon(QLatin1String(":images/16x16/stock-duplicate-16.png"));
-    QIcon delIcon(QLatin1String(":images/16x16/edit-delete.png"));
-    QIcon propIcon(QLatin1String(":images/16x16/document-properties.png"));
-    QString dupText = tr("Duplicate %n Object(s)", "", selectedObjects.size());
-    QString removeText = tr("Remove %n Object(s)", "", selectedObjects.size());
-    QAction *dupAction = menu.addAction(dupIcon, dupText);
-    QAction *removeAction = menu.addAction(delIcon, removeText);
+    MapDocumentActionHandler *handler = MapDocumentActionHandler::instance();
 
-    typedef QMap<QAction*, ObjectGroup*> MoveToLayerActionMap;
-    MoveToLayerActionMap moveToLayerActions;
+    QMenu menu;
+    menu.addAction(handler->actionDuplicateObjects());
+    menu.addAction(handler->actionRemoveObjects());
+
+    menu.addSeparator();
+    QAction *horizontalAction = menu.addAction(tr("Flip Horizontally"));
+    QAction *verticalAction = menu.addAction(tr("Flip Vertically"));
+    connect(horizontalAction, SIGNAL(triggered()), SLOT(flipHorizontally()));
+    connect(verticalAction, SIGNAL(triggered()), SLOT(flipVertically()));
 
     if (objectGroups.size() > 1) {
         menu.addSeparator();
@@ -145,82 +153,14 @@ void AbstractObjectTool::showContextMenu(MapObjectItem *clickedObjectItem,
                                                  "", selectedObjects.size()));
         foreach (ObjectGroup *objectGroup, objectGroups) {
             QAction *action = moveToLayerMenu->addAction(objectGroup->name());
-            moveToLayerActions.insert(action, objectGroup);
+            action->setData(QVariant::fromValue(objectGroup));
         }
     }
 
-    menu.addSeparator();
-    QAction *propertiesAction = menu.addAction(propIcon,
-                                               tr("Object &Properties..."));
-    // TODO: Implement editing of properties for multiple objects
-    propertiesAction->setEnabled(selectedObjects.size() == 1);
+    QAction *action = menu.exec(screenPos);
+    if (!action)
+        return;
 
-    Utils::setThemeIcon(removeAction, "edit-delete");
-    Utils::setThemeIcon(propertiesAction, "document-properties");
-
-    QAction *selectedAction = menu.exec(screenPos);
-
-    if (selectedAction == dupAction) {
-        duplicateObjects(selectedObjects);
-    }
-    else if (selectedAction == removeAction) {
-        removeObjects(selectedObjects);
-    }
-    else if (selectedAction == propertiesAction) {
-        MapObject *mapObject = selectedObjects.first();
-        ObjectPropertiesDialog propertiesDialog(mapDocument(), mapObject,
-                                                parent);
-        propertiesDialog.exec();
-    }
-
-    MoveToLayerActionMap::const_iterator i =
-            moveToLayerActions.find(selectedAction);
-
-    if (i != moveToLayerActions.end()) {
-        ObjectGroup *objectGroup = i.value();
-        moveObjectsToGroup(selectedObjects, objectGroup);
-    }
-}
-
-void AbstractObjectTool::duplicateObjects(const QList<MapObject *> &objects)
-{
-    QUndoStack *undoStack = mapDocument()->undoStack();
-    undoStack->beginMacro(tr("Duplicate %n Object(s)", "", objects.size()));
-
-    QList<MapObject*> clones;
-    foreach (const MapObject *mapObject, objects) {
-        MapObject *clone = mapObject->clone();
-        clones.append(clone);
-        undoStack->push(new AddMapObject(mapDocument(),
-                                         mapObject->objectGroup(),
-                                         clone));
-    }
-
-    undoStack->endMacro();
-    mapDocument()->setSelectedObjects(clones);
-}
-
-void AbstractObjectTool::removeObjects(const QList<MapObject *> &objects)
-{
-    QUndoStack *undoStack = mapDocument()->undoStack();
-    undoStack->beginMacro(tr("Remove %n Object(s)", "", objects.size()));
-    foreach (MapObject *mapObject, objects)
-        undoStack->push(new RemoveMapObject(mapDocument(), mapObject));
-    undoStack->endMacro();
-}
-
-void AbstractObjectTool::moveObjectsToGroup(const QList<MapObject *> &objects,
-                                            ObjectGroup *objectGroup)
-{
-    QUndoStack *undoStack = mapDocument()->undoStack();
-    undoStack->beginMacro(tr("Move %n Object(s) to Layer", "",
-                             objects.size()));
-    foreach (MapObject *mapObject, objects) {
-        if (mapObject->objectGroup() == objectGroup)
-            continue;
-        undoStack->push(new MoveMapObjectToGroup(mapDocument(),
-                                                 mapObject,
-                                                 objectGroup));
-    }
-    undoStack->endMacro();
+    if (ObjectGroup *objectGroup = action->data().value<ObjectGroup*>())
+        handler->moveObjectsToGroup(objectGroup);
 }

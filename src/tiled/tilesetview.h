@@ -81,6 +81,13 @@ public:
     void setEditTerrain(bool enabled);
 
     /**
+     * Sets whether terrain editing is in "erase" mode.
+     * \sa setEditTerrain
+     */
+    void setEraseTerrain(bool erase) { mEraseTerrain = erase; }
+    bool isEraseTerrain() const { return mEraseTerrain; }
+
+    /**
      * The id of the terrain currently being specified. Set to -1 for erasing
      * terrain info.
      */
@@ -96,6 +103,7 @@ public:
     int hoveredCorner() const { return mHoveredCorner; }
 
 signals:
+    void createNewTerrain(Tile *tile);
     void terrainImageSelected(Tile *tile);
 
 protected:
@@ -108,8 +116,8 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event);
 
 private slots:
+    void createNewTerrain();
     void selectTerrainImage();
-    void editTileProperties();
     void setDrawGrid(bool drawGrid);
 
     void adjustScale();
@@ -124,6 +132,7 @@ private:
     bool mDrawGrid;
 
     bool mEditTerrain;
+    bool mEraseTerrain;
     int mTerrainId;
     QModelIndex mHoveredIndex;
     int mHoveredCorner;

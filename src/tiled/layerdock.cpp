@@ -28,8 +28,6 @@
 #include "map.h"
 #include "mapdocument.h"
 #include "mapdocumentactionhandler.h"
-#include "propertiesdialog.h"
-#include "objectgrouppropertiesdialog.h"
 #include "objectgroup.h"
 #include "colourlayer.h"
 #include "utils.h"
@@ -96,9 +94,13 @@ LayerDock::LayerDock(QWidget *parent):
     buttonContainer->addSeparator();
     buttonContainer->addAction(handler->actionToggleOtherLayers());
 
+    QVBoxLayout *listAndToolBar = new QVBoxLayout;
+    listAndToolBar->setSpacing(0);
+    listAndToolBar->addWidget(mLayerView);
+    listAndToolBar->addWidget(buttonContainer);
+
     layout->addLayout(opacityLayout);
-    layout->addWidget(mLayerView);
-    layout->addWidget(buttonContainer);
+    layout->addLayout(listAndToolBar);
 
     setWidget(widget);
     retranslateUi();
@@ -106,11 +108,6 @@ LayerDock::LayerDock(QWidget *parent):
     connect(mOpacitySlider, SIGNAL(valueChanged(int)),
             this, SLOT(sliderValueChanged(int)));
     updateOpacitySlider();
-
-    // Workaround since a tabbed dockwidget that is not currently visible still
-    // returns true for isVisible()
-    connect(this, SIGNAL(visibilityChanged(bool)),
-            mLayerView, SLOT(setVisible(bool)));
 }
 
 void LayerDock::setMapDocument(MapDocument *mapDocument)
@@ -128,6 +125,8 @@ void LayerDock::setMapDocument(MapDocument *mapDocument)
                 this, SLOT(updateOpacitySlider()));
         connect(mMapDocument, SIGNAL(layerChanged(int)),
                 this, SLOT(layerChanged(int)));
+        connect(mMapDocument, SIGNAL(editLayerNameRequested()),
+                this, SLOT(editLayerName()));
     }
 
     mLayerView->setMapDocument(mapDocument);
@@ -176,6 +175,19 @@ void LayerDock::layerChanged(int index)
     updateOpacitySlider();
 }
 
+void LayerDock::editLayerName()
+{
+    if (!isVisible())
+        return;
+
+    const LayerModel *layerModel = mMapDocument->layerModel();
+    const int currentLayerIndex = mMapDocument->currentLayerIndex();
+    const int row = layerModel->layerIndexToRow(currentLayerIndex);
+
+    raise();
+    mLayerView->edit(layerModel->index(row));
+}
+
 void LayerDock::sliderValueChanged(int opacity)
 {
     if (!mMapDocument)
@@ -220,6 +232,9 @@ LayerView::LayerView(QWidget *parent):
     setHeaderHidden(true);
     setItemsExpandable(false);
     setUniformRowHeights(true);
+
+    connect(this, SIGNAL(pressed(QModelIndex)),
+            SLOT(indexPressed(QModelIndex)));
 }
 
 QSize LayerView::sizeHint() const
@@ -243,8 +258,6 @@ void LayerView::setMapDocument(MapDocument *mapDocument)
 
         connect(mMapDocument, SIGNAL(currentLayerIndexChanged(int)),
                 this, SLOT(currentLayerIndexChanged(int)));
-        connect(mMapDocument, SIGNAL(editLayerNameRequested()),
-                this, SLOT(editLayerName()));
 
         QItemSelectionModel *s = selectionModel();
         connect(s, SIGNAL(currentRowChanged(QModelIndex,QModelIndex)),
@@ -262,6 +275,15 @@ void LayerView::currentRowChanged(const QModelIndex &index)
     mMapDocument->setCurrentLayerIndex(layer);
 }
 
+void LayerView::indexPressed(const QModelIndex &index)
+{
+    const int layerIndex = mMapDocument->layerModel()->toLayerIndex(index);
+    if (layerIndex != -1) {
+        Layer *layer = mMapDocument->map()->layerAt(layerIndex);
+        mMapDocument->setCurrentObject(layer);
+    }
+}
+
 void LayerView::currentLayerIndexChanged(int index)
 {
     if (index > -1) {
@@ -271,17 +293,6 @@ void LayerView::currentLayerIndexChanged(int index)
     } else {
         setCurrentIndex(QModelIndex());
     }
-}
-
-void LayerView::editLayerName()
-{
-    if (!isVisible())
-        return;
-
-    const LayerModel *layerModel = mMapDocument->layerModel();
-    const int currentLayerIndex = mMapDocument->currentLayerIndex();
-    const int row = layerModel->layerIndexToRow(currentLayerIndex);
-    edit(layerModel->index(row));
 }
 
 void LayerView::contextMenuEvent(QContextMenuEvent *event)
@@ -305,14 +316,11 @@ void LayerView::contextMenuEvent(QContextMenuEvent *event)
         menu.addAction(handler->actionDuplicateLayer());
         menu.addAction(handler->actionMergeLayerDown());
         menu.addAction(handler->actionRemoveLayer());
-        menu.addAction(handler->actionRenameLayer());
         menu.addSeparator();
         menu.addAction(handler->actionMoveLayerUp());
         menu.addAction(handler->actionMoveLayerDown());
         menu.addSeparator();
         menu.addAction(handler->actionToggleOtherLayers());
-        menu.addSeparator();
-        menu.addAction(handler->actionLayerProperties());
     }
 
     menu.exec(event->globalPos());

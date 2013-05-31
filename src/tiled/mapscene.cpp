@@ -1,6 +1,6 @@
 /*
  * mapscene.cpp
- * Copyright 2008-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2008-2013, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2008, Roderic Morris <roderic@ccs.neu.edu>
  * Copyright 2009, Edward Hutchins <eah1@yahoo.com>
  * Copyright 2010, Jeff Bland <jksb@member.fsf.org>
@@ -109,8 +109,8 @@ void MapScene::setMapDocument(MapDocument *mapDocument)
     refreshScene();
 
     if (mMapDocument) {
-        mMapDocument->renderer()->setFlag(ShowTileObjectOutlines,
-                                          mShowTileObjectOutlines);
+        MapRenderer *renderer = mMapDocument->renderer();
+        renderer->setFlag(ShowTileObjectOutlines, mShowTileObjectOutlines);
 
         connect(mMapDocument, SIGNAL(mapChanged()),
                 this, SLOT(mapChanged()));
@@ -122,6 +122,8 @@ void MapScene::setMapDocument(MapDocument *mapDocument)
                 this, SLOT(layerRemoved(int)));
         connect(mMapDocument, SIGNAL(layerChanged(int)),
                 this, SLOT(layerChanged(int)));
+        connect(mMapDocument, SIGNAL(imageLayerChanged(ImageLayer*)),
+                this, SLOT(imageLayerChanged(ImageLayer*)));
         connect(mMapDocument, SIGNAL(currentLayerIndexChanged(int)),
                 this, SLOT(currentLayerIndexChanged()));
         connect(mMapDocument, SIGNAL(objectsAdded(QList<MapObject*>)),
@@ -139,11 +141,11 @@ void MapScene::setSelectedObjectItems(const QSet<MapObjectItem *> &items)
 {
     // Inform the map document about the newly selected objects
     QList<MapObject*> selectedObjects;
-#if QT_VERSION >= 0x040700
     selectedObjects.reserve(items.size());
-#endif
+
     foreach (const MapObjectItem *item, items)
         selectedObjects.append(item->mapObject());
+
     mMapDocument->setSelectedObjects(selectedObjects);
 }
 
@@ -365,6 +367,19 @@ void MapScene::layerChanged(int index)
 }
 
 /**
+ * When an image layer has changed, it may change size and it may look
+ * differently.
+ */
+void MapScene::imageLayerChanged(ImageLayer *imageLayer)
+{
+    const int index = mMapDocument->map()->layers().indexOf(imageLayer);
+    ImageLayerItem *item = static_cast<ImageLayerItem*>(mLayerItems.at(index));
+
+    item->syncWithImageLayer();
+    item->update();
+}
+
+/**
  * Inserts map object items for the given objects.
  */
 void MapScene::objectsAdded(const QList<MapObject*> &objects)
@@ -504,6 +519,15 @@ bool MapScene::event(QEvent *event)
     }
 
     return QGraphicsScene::event(event);
+}
+
+void MapScene::keyPressEvent(QKeyEvent *event)
+{
+    if (mActiveTool)
+        mActiveTool->keyPressed(event);
+
+    if (!(mActiveTool && event->isAccepted()))
+        QGraphicsScene::keyPressEvent(event);
 }
 
 void MapScene::mouseMoveEvent(QGraphicsSceneMouseEvent *mouseEvent)

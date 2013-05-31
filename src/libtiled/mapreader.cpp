@@ -59,6 +59,8 @@ class MapReaderPrivate
 {
     Q_DECLARE_TR_FUNCTIONS(MapReader)
 
+    friend class Tiled::MapReader;
+
 public:
     MapReaderPrivate(MapReader *mapReader):
         p(mapReader),
@@ -99,7 +101,7 @@ private:
      * @return the cell data associated with the given global tile ID, or an
      *         empty cell if not found
      */
-    Cell cellForGid(uint gid);
+    Cell cellForGid(unsigned gid);
 
     ImageLayer *readImageLayer();
     void readImageLayerImage(ImageLayer *imageLayer);
@@ -124,6 +126,7 @@ private:
     QString mError;
     QString mPath;
     Map *mMap;
+    QList<Tileset*> mCreatedTilesets;
     GidMapper mGidMapper;
     bool mReadingExternalTileset;
 
@@ -196,9 +199,9 @@ bool MapReaderPrivate::openFile(QFile *file)
 
 void MapReaderPrivate::readUnknownElement()
 {
-    qDebug() << "Unknown element (fixme):" << xml.name()
-             << " at line " << xml.lineNumber()
-             << ", column " << xml.columnNumber();
+    qDebug().nospace() << "Unknown element (fixme): " << xml.name()
+                       << " at line " << xml.lineNumber()
+                       << ", column " << xml.columnNumber();
     xml.skipCurrentElement();
 }
 
@@ -227,6 +230,7 @@ Map *MapReaderPrivate::readMap()
     }
 
     mMap = new Map(orientation, mapWidth, mapHeight, tileWidth, tileHeight);
+    mCreatedTilesets.clear();
 
     QStringRef bgColorString = atts.value(QLatin1String("backgroundcolor"));
     if (!bgColorString.isEmpty())
@@ -252,7 +256,8 @@ Map *MapReaderPrivate::readMap()
     // Clean up in case of error
     if (xml.hasError()) {
         // The tilesets are not owned by the map
-        qDeleteAll(mMap->tilesets());
+        qDeleteAll(mCreatedTilesets);
+        mCreatedTilesets.clear();
 
         delete mMap;
         mMap = 0;
@@ -267,7 +272,7 @@ Tileset *MapReaderPrivate::readTileset()
 
     const QXmlStreamAttributes atts = xml.attributes();
     const QString source = atts.value(QLatin1String("source")).toString();
-    const uint firstGid =
+    const unsigned firstGid =
             atts.value(QLatin1String("firstgid")).toString().toUInt();
 
     Tileset *tileset = 0;
@@ -291,6 +296,8 @@ Tileset *MapReaderPrivate::readTileset()
         } else {
             tileset = new Tileset(name, tileWidth, tileHeight,
                                   tileSpacing, margin);
+
+            mCreatedTilesets.append(tileset);
 
             while (xml.readNextStartElement()) {
                 if (xml.name() == QLatin1String("tile")) {
@@ -547,7 +554,7 @@ void MapReaderPrivate::readLayerData(TileLayer *tileLayer)
                 }
 
                 const QXmlStreamAttributes atts = xml.attributes();
-                uint gid = atts.value(QLatin1String("gid")).toString().toUInt();
+                unsigned gid = atts.value(QLatin1String("gid")).toString().toUInt();
                 tileLayer->setCell(x, y, cellForGid(gid));
 
                 x++;
@@ -610,10 +617,10 @@ void MapReaderPrivate::decodeBinaryLayerData(TileLayer *tileLayer,
     int y = 0;
 
     for (int i = 0; i < size - 3; i += 4) {
-        const uint gid = data[i] |
-                         data[i + 1] << 8 |
-                         data[i + 2] << 16 |
-                         data[i + 3] << 24;
+        const unsigned gid = data[i] |
+                             data[i + 1] << 8 |
+                             data[i + 2] << 16 |
+                             data[i + 3] << 24;
 
         tileLayer->setCell(x, y, cellForGid(gid));
 
@@ -639,7 +646,7 @@ void MapReaderPrivate::decodeCSVLayerData(TileLayer *tileLayer, const QString &t
     for (int y = 0; y < tileLayer->height(); y++) {
         for (int x = 0; x < tileLayer->width(); x++) {
             bool conversionOk;
-            const uint gid = tiles.at(y * tileLayer->width() + x)
+            const unsigned gid = tiles.at(y * tileLayer->width() + x)
                     .toUInt(&conversionOk);
             if (!conversionOk) {
                 xml.raiseError(
@@ -652,7 +659,7 @@ void MapReaderPrivate::decodeCSVLayerData(TileLayer *tileLayer, const QString &t
     }
 }
 
-Cell MapReaderPrivate::cellForGid(uint gid)
+Cell MapReaderPrivate::cellForGid(unsigned gid)
 {
     bool ok;
     const Cell result = mGidMapper.gidToCell(gid, ok);
@@ -768,7 +775,7 @@ MapObject *MapReaderPrivate::readObject()
 
     const QXmlStreamAttributes atts = xml.attributes();
     const QString name = atts.value(QLatin1String("name")).toString();
-    const uint gid = atts.value(QLatin1String("gid")).toString().toUInt();
+    const unsigned gid = atts.value(QLatin1String("gid")).toString().toUInt();
     const int x = atts.value(QLatin1String("x")).toString().toInt();
     const int y = atts.value(QLatin1String("y")).toString().toInt();
     const int width = atts.value(QLatin1String("width")).toString().toInt();
@@ -781,12 +788,15 @@ MapObject *MapReaderPrivate::readObject()
 
     MapObject *object = new MapObject(name, type, pos, QSizeF(size.x(),
                                                               size.y()));
-    if (gid) {
-        const Cell cell = cellForGid(gid);
-        object->setTile(cell.tile);
-    }
 
     bool ok;
+    const qreal rotation = atts.value(QLatin1String("rotation")).toString().toDouble(&ok);
+    if (ok)
+        object->setRotation(rotation);
+
+    if (gid)
+        object->setCell(cellForGid(gid));
+
     const int visible = visibleRef.toString().toInt(&ok);
     if (ok)
         object->setVisible(visible);
@@ -952,9 +962,13 @@ Tileset *MapReader::readExternalTileset(const QString &source,
                                         QString *error)
 {
     MapReader reader;
+
     Tileset *tileset = reader.readTileset(source);
     if (!tileset)
         *error = reader.errorString();
+    else
+        d->mCreatedTilesets.append(tileset);
+
     return tileset;
 }
 

@@ -52,9 +52,6 @@ private slots:
     void updateActions();
     void aboutToShowMoveToMenu();
     void triggeredMoveToMenu(QAction *action);
-    void duplicateObjects();
-    void removeObjects();
-    void objectProperties();
     void documentCloseRequested(int index);
 
 private:
@@ -63,10 +60,8 @@ private:
     void saveExpandedGroups(MapDocument *mapDoc);
     void restoreExpandedGroups(MapDocument *mapDoc);
 
-    QAction *mActionDuplicateObjects;
-    QAction *mActionRemoveObjects;
-    QAction *mActionObjectProperties;
-    QAction *mActionMoveToLayer;
+    QAction *mActionNewLayer;
+    QAction *mActionMoveToGroup;
 
     ObjectsView *mObjectsView;
     MapDocument *mMapDocument;
@@ -91,7 +86,7 @@ protected slots:
                                   const QItemSelection &deselected);
 
 private slots:
-    void onActivated(const QModelIndex &index);
+    void onPressed(const QModelIndex &index);
     void selectedObjectsChanged();
 
 private:

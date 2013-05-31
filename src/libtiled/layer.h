@@ -53,7 +53,7 @@ class Tileset;
 class TILEDSHARED_EXPORT Layer : public Object
 {
 public:
-    enum Type {
+    enum TypeFlag {
         TileLayerType   = 0x01,
         ObjectGroupType = 0x02,
         ImageLayerType  = 0x04,
@@ -65,13 +65,13 @@ public:
     /**
      * Constructor.
      */
-    Layer(Type type, const QString &name, int x, int y,
+    Layer(TypeFlag type, const QString &name, int x, int y,
           int width, int height);
 
     /**
      * Returns the type of this layer.
      */
-    Type type() const { return mType; }
+    TypeFlag layerType() const { return mLayerType; }
 
     /**
      * Returns the name of this layer.
@@ -218,10 +218,10 @@ public:
 
     // These functions allow checking whether this Layer is an instance of the
     // given subclass without relying on a dynamic_cast.
-    bool isTileLayer() const { return mType == TileLayerType; }
-    bool isObjectGroup() const { return mType == ObjectGroupType; }
-    bool isImageLayer() const { return mType == ImageLayerType; }
-    bool isColourLayer() const { return mType == ColourLayerType; }
+    bool isTileLayer() const { return mLayerType == TileLayerType; }
+    bool isObjectGroup() const { return mLayerType == ObjectGroupType; }
+    bool isImageLayer() const { return mLayerType == ImageLayerType; }
+    bool isColourLayer() const { return mLayerType == ColourLayerType; }
 
     // These actually return this layer cast to one of its subclasses.
     TileLayer *asTileLayer();
@@ -233,7 +233,7 @@ protected:
     Layer *initializeClone(Layer *clone) const;
 
     QString mName;
-    Type mType;
+    TypeFlag mLayerType;
     int mX;
     int mY;
     int mWidth;

@@ -32,7 +32,6 @@
 #include "mapobject.h"
 #include "movetileset.h"
 #include "objectgroup.h"
-#include "propertiesdialog.h"
 #include "terrain.h"
 #include "tile.h"
 #include "tilelayer.h"
@@ -55,6 +54,7 @@
 #include <QMessageBox>
 #include <QSignalMapper>
 #include <QStackedWidget>
+#include <QStylePainter>
 #include <QToolBar>
 #include <QToolButton>
 #include <QUrl>
@@ -104,28 +104,34 @@ private:
     QString mFileName;
 };
 
-class RenameTileset : public QUndoCommand
+
+class TilesetMenuButton : public QToolButton
 {
 public:
-    RenameTileset(MapDocument *mapDocument,
-                  Tileset *tileset,
-                  const QString &newName)
-        : QUndoCommand(QCoreApplication::translate("Undo Commands",
-                                                   "Change Tileset Name"))
-        , mMapDocument(mapDocument)
-        , mTileset(tileset)
-        , mOldName(tileset->name())
-        , mNewName(newName)
-    {}
+    TilesetMenuButton(QWidget *parent = 0)
+        : QToolButton(parent)
+    {
+        setArrowType(Qt::DownArrow);
+        setIconSize(QSize(16, 16));
+        setPopupMode(QToolButton::InstantPopup);
+        setAutoRaise(true);
 
-    void undo() { mMapDocument->setTilesetName(mTileset, mOldName); }
-    void redo() { mMapDocument->setTilesetName(mTileset, mNewName); }
+        setSizePolicy(sizePolicy().horizontalPolicy(),
+                      QSizePolicy::Ignored);
+    }
 
-private:
-    MapDocument *mMapDocument;
-    Tileset *mTileset;
-    QString mOldName;
-    QString mNewName;
+protected:
+    void paintEvent(QPaintEvent *)
+    {
+        QStylePainter p(this);
+        QStyleOptionToolButton opt;
+        initStyleOption(&opt);
+
+        // Disable the menu arrow, since we already got a down arrow icon
+        opt.features &= ~QStyleOptionToolButton::HasMenu;
+
+        p.drawComplexControl(QStyle::CC_ToolButton, opt);
+    }
 };
 
 } // anonymous namespace
@@ -142,10 +148,10 @@ TilesetDock::TilesetDock(QWidget *parent):
     mExportTileset(new QAction(this)),
     mPropertiesTileset(new QAction(this)),
     mDeleteTileset(new QAction(this)),
-    mRenameTileset(new QAction(this)),
     mEditTerrain(new QAction(this)),
-    mTilesetMenuButton(new QToolButton(this)),
+    mTilesetMenuButton(new TilesetMenuButton(this)),
     mTilesetMenu(new QMenu(this)),
+    mTilesetActionGroup(new QActionGroup(this)),
     mTilesetMenuMapper(0)
 {
     setObjectName(QLatin1String("TilesetDock"));
@@ -160,19 +166,19 @@ TilesetDock::TilesetDock(QWidget *parent):
 
     QWidget *w = new QWidget(this);
 
-    QHBoxLayout *horizontal = new QHBoxLayout();
-    horizontal->setSpacing(5);
+    QHBoxLayout *horizontal = new QHBoxLayout;
+    horizontal->setSpacing(0);
     horizontal->addWidget(mTabBar);
     horizontal->addWidget(mTilesetMenuButton);
 
     QVBoxLayout *vertical = new QVBoxLayout(w);
-    vertical->setSpacing(5);
+    vertical->setSpacing(0);
     vertical->setMargin(5);
     vertical->addLayout(horizontal);
     vertical->addWidget(mViewStack);
 
-    horizontal = new QHBoxLayout();
-    horizontal->setSpacing(5);
+    horizontal = new QHBoxLayout;
+    horizontal->setSpacing(0);
     horizontal->addWidget(mToolBar, 1);
     vertical->addLayout(horizontal);
 
@@ -180,14 +186,12 @@ TilesetDock::TilesetDock(QWidget *parent):
     mExportTileset->setIcon(QIcon(QLatin1String(":images/16x16/document-export.png")));
     mPropertiesTileset->setIcon(QIcon(QLatin1String(":images/16x16/document-properties.png")));
     mDeleteTileset->setIcon(QIcon(QLatin1String(":images/16x16/edit-delete.png")));
-    mRenameTileset->setIcon(QIcon(QLatin1String(":images/16x16/edit-rename.png")));
     mEditTerrain->setIcon(QIcon(QLatin1String(":images/16x16/terrain.png")));
 
     Utils::setThemeIcon(mImportTileset, "document-import");
     Utils::setThemeIcon(mExportTileset, "document-export");
     Utils::setThemeIcon(mPropertiesTileset, "document-properties");
     Utils::setThemeIcon(mDeleteTileset, "edit-delete");
-    Utils::setThemeIcon(mRenameTileset, "edit-rename");
 
     connect(mImportTileset, SIGNAL(triggered()),
             SLOT(importTileset()));
@@ -197,8 +201,6 @@ TilesetDock::TilesetDock(QWidget *parent):
             SLOT(editTilesetProperties()));
     connect(mDeleteTileset, SIGNAL(triggered()),
             SLOT(removeTileset()));
-    connect(mRenameTileset, SIGNAL(triggered()),
-            SLOT(renameTileset()));
     connect(mEditTerrain, SIGNAL(triggered()),
             SLOT(editTerrain()));
 
@@ -207,18 +209,17 @@ TilesetDock::TilesetDock(QWidget *parent):
     mToolBar->addAction(mExportTileset);
     mToolBar->addAction(mPropertiesTileset);
     mToolBar->addAction(mDeleteTileset);
-    mToolBar->addAction(mRenameTileset);
     mToolBar->addAction(mEditTerrain);
 
     mZoomable = new Zoomable(this);
-    mZoomable->setZoomFactors(QVector<qreal>() << 0.25 << 0.5 << 0.75 << 1.0 << 1.25 << 1.5 << 1.75 << 2.0 << 4.0);
-    mToolBar->addSeparator();
     mZoomComboBox = new QComboBox;
     mZoomable->connectToComboBox(mZoomComboBox);
     horizontal->addWidget(mZoomComboBox);
 
     connect(mViewStack, SIGNAL(currentChanged(int)),
             this, SLOT(updateCurrentTiles()));
+    connect(mViewStack, SIGNAL(currentChanged(int)),
+            this, SLOT(updateCurrentTile()));
 
     connect(TilesetManager::instance(), SIGNAL(tilesetChanged(Tileset*)),
             this, SLOT(tilesetChanged(Tileset*)));
@@ -227,8 +228,6 @@ TilesetDock::TilesetDock(QWidget *parent):
             SLOT(documentCloseRequested(int)));
 
     mTilesetMenuButton->setMenu(mTilesetMenu);
-    mTilesetMenuButton->setPopupMode(QToolButton::InstantPopup);
-    mTilesetMenuButton->setAutoRaise(true);
     connect(mTilesetMenu, SIGNAL(aboutToShow()), SLOT(refreshTilesetMenu()));
 
     setWidget(w);
@@ -356,9 +355,14 @@ void TilesetDock::updateActions()
             if (!view->model()) {
                 // Lazily set up the model
                 view->setModel(new TilesetModel(tileset, view));
-                connect(view->selectionModel(),
-                        SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
+
+                QItemSelectionModel *s = view->selectionModel();
+                connect(s, SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
                         SLOT(updateCurrentTiles()));
+                connect(s, SIGNAL(currentChanged(QModelIndex,QModelIndex)),
+                        SLOT(updateCurrentTile()));
+                connect(view, SIGNAL(pressed(QModelIndex)),
+                        SLOT(indexPressed(QModelIndex)));
             }
 
             mViewStack->setCurrentIndex(index);
@@ -366,7 +370,6 @@ void TilesetDock::updateActions()
         }
     }
 
-    mRenameTileset->setEnabled(view && !external);
     mImportTileset->setEnabled(view && external);
     mExportTileset->setEnabled(view && !external);
     mPropertiesTileset->setEnabled(view && !external);
@@ -376,11 +379,11 @@ void TilesetDock::updateActions()
 
 void TilesetDock::updateCurrentTiles()
 {
-    const int viewIndex = mViewStack->currentIndex();
-    if (viewIndex == -1)
+    TilesetView *view = currentTilesetView();
+    if (!view)
         return;
 
-    const QItemSelectionModel *s = tilesetViewAt(viewIndex)->selectionModel();
+    const QItemSelectionModel *s = view->selectionModel();
     if (!s)
         return;
 
@@ -406,7 +409,7 @@ void TilesetDock::updateCurrentTiles()
                                          maxX - minX + 1,
                                          maxY - minY + 1);
 
-    const TilesetModel *model = static_cast<const TilesetModel*>(s->model());
+    const TilesetModel *model = view->tilesetModel();
     foreach (const QModelIndex &index, indexes) {
         tileLayer->setCell(index.column() - minX,
                            index.row() - minY,
@@ -414,7 +417,20 @@ void TilesetDock::updateCurrentTiles()
     }
 
     setCurrentTiles(tileLayer);
-    setCurrentTile(model->tileAt(s->currentIndex()));
+}
+
+void TilesetDock::updateCurrentTile()
+{
+    if (const TilesetView *view = currentTilesetView())
+        if (const QItemSelectionModel *s = view->selectionModel())
+            setCurrentTile(view->tilesetModel()->tileAt(s->currentIndex()));
+}
+
+void TilesetDock::indexPressed(const QModelIndex &index)
+{
+    TilesetView *view = currentTilesetView();
+    if (Tile *tile = view->tilesetModel()->tileAt(index))
+        mMapDocument->setCurrentObject(tile);
 }
 
 void TilesetDock::tilesetAdded(int index, Tileset *tileset)
@@ -535,7 +551,7 @@ void TilesetDock::removeTileset(int index)
                 }
             } else if (ObjectGroup *objectGroup = layer->asObjectGroup()) {
                 foreach (MapObject *object, objectGroup->objects()) {
-                    const Tile *tile = object->tile();
+                    const Tile *tile = object->cell().tile;
                     if (tile && tile->tileset() == tileset) {
                         undoStack->push(new RemoveMapObject(mMapDocument,
                                                             object));
@@ -572,7 +588,10 @@ void TilesetDock::setCurrentTile(Tile *tile)
         return;
 
     mCurrentTile = tile;
-    emit currentTileChanged(mCurrentTile);
+    emit currentTileChanged(tile);
+
+    if (tile)
+        mMapDocument->setCurrentObject(tile);
 }
 
 void TilesetDock::retranslateUi()
@@ -582,7 +601,6 @@ void TilesetDock::retranslateUi()
     mExportTileset->setText(tr("&Export Tileset As..."));
     mPropertiesTileset->setText(tr("Tile&set Properties"));
     mDeleteTileset->setText(tr("&Remove Tileset"));
-    mRenameTileset->setText(tr("Rena&me Tileset"));
     mEditTerrain->setText(tr("Edit &Terrain Information"));
 }
 
@@ -611,11 +629,8 @@ void TilesetDock::editTilesetProperties()
     if (!tileset)
         return;
 
-    PropertiesDialog propertiesDialog(tr("Tileset"),
-                                      tileset,
-                                      mMapDocument->undoStack(),
-                                      this);
-    propertiesDialog.exec();
+    mMapDocument->setCurrentObject(tileset);
+    mMapDocument->emitEditCurrentObject();
 }
 
 void TilesetDock::exportTileset()
@@ -658,23 +673,6 @@ void TilesetDock::importTileset()
     mMapDocument->undoStack()->push(command);
 }
 
-void TilesetDock::renameTileset()
-{
-    bool ok;
-    const QString oldText = mTabBar->tabText(mTabBar->currentIndex());
-    QString newText = QInputDialog::getText(this, tr("Rename Tileset"),
-                                         tr("New name:"), QLineEdit::Normal,
-                                         oldText, &ok);
-
-    if (!ok || newText == oldText)
-        return;
-
-    RenameTileset *name = new RenameTileset(mMapDocument,
-                                            currentTileset(),
-                                            newText);
-    mMapDocument->undoStack()->push(name);
-}
-
 void TilesetDock::editTerrain()
 {
     Tileset *tileset = currentTileset();
@@ -712,9 +710,16 @@ void TilesetDock::refreshTilesetMenu()
     connect(mTilesetMenuMapper, SIGNAL(mapped(int)),
             mTabBar, SLOT(setCurrentIndex(int)));
 
+    const int currentIndex = mTabBar->currentIndex();
+
     for (int i = 0; i < mTabBar->count(); ++i) {
-        const QString name = mTabBar->tabText(i);
-        QAction *action = new QAction(name, this);
+        QAction *action = new QAction(mTabBar->tabText(i), this);
+        action->setCheckable(true);
+
+        mTilesetActionGroup->addAction(action);
+        if (i == currentIndex)
+            action->setChecked(true);
+
         mTilesetMenu->addAction(action);
         connect(action, SIGNAL(triggered()), mTilesetMenuMapper, SLOT(map()));
         mTilesetMenuMapper->setMapping(action, i);

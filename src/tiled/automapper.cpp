@@ -140,26 +140,26 @@ bool AutoMapper::setupRuleMapTileLayers()
             if (layerName.endsWith(QLatin1String("input"),
                                  Qt::CaseInsensitive) || treatAsBoth) {
                 if (mLayerInputRegions) {
-                    error += tr("'input regions layer must not occur more than once.")
+                    error += tr("'regions_input' layer must not occur more than once.")
                             + QLatin1Char('\n');
                 }
                 if (layer->isTileLayer()) {
                     mLayerInputRegions = layer->asTileLayer();
                 } else {
-                    error += tr("regions layer must be tile layer!")
+                    error += tr("'regions_*' layers must be tile layers.")
                             + QLatin1Char('\n');
                 }
             }
             if (layerName.endsWith(QLatin1String("output"),
                                  Qt::CaseInsensitive) || treatAsBoth) {
                 if (mLayerOutputRegions) {
-                    error += tr("'output regions layer must not occur more than once.")
+                    error += tr("'regions_output' layer must not occur more than once.")
                             + QLatin1Char('\n');
                 }
                 if (layer->isTileLayer()) {
                     mLayerOutputRegions = layer->asTileLayer();
                 } else {
-                    error += tr("regions layer must be tile layer!")
+                    error += tr("'regions_*' layers must be tile layers.")
                             + QLatin1Char('\n');
                 }
             }
@@ -194,7 +194,7 @@ bool AutoMapper::setupRuleMapTileLayers()
                                                   Qt::CaseInsensitive);
 
             if (!layer->isTileLayer()) {
-                error += tr("'input' and 'inputnot' layers must be tile layers!")
+                error += tr("'input_*' and 'inputnot_*' layers must be tile layers.")
                         + QLatin1Char('\n');
                 continue;
             }
@@ -226,7 +226,7 @@ bool AutoMapper::setupRuleMapTileLayers()
             else
                 mTouchedObjectGroups.insert(name);
 
-            Layer::Type type = layer->type();
+            Layer::TypeFlag type = layer->layerType();
             int layerIndex = mMapWork->indexOfLayer(name, type);
 
             bool found = false;
@@ -250,10 +250,10 @@ bool AutoMapper::setupRuleMapTileLayers()
     }
 
     if (!mLayerInputRegions)
-        error += tr("No input regions layer found!") + QLatin1Char('\n');
+        error += tr("No 'regions' or 'regions_input' layer found.") + QLatin1Char('\n');
 
     if (!mLayerOutputRegions)
-        error += tr("No output regions layer found!") + QLatin1Char('\n');
+        error += tr("No 'regions' or 'regions_output' layer found.") + QLatin1Char('\n');
 
     if (mInputRules.isEmpty())
         error += tr("No input_<name> layer found!") + QLatin1Char('\n');
@@ -389,7 +389,7 @@ bool AutoMapper::setupCorrectIndexes()
             if (index >= mMapWork->layerCount() || index == -1 ||
                     name != mMapWork->layerAt(index)->name()) {
 
-                int newIndex = mMapWork->indexOfLayer(name, layerKey->type());
+                int newIndex = mMapWork->indexOfLayer(name, layerKey->layerType());
                 Q_ASSERT(newIndex != -1);
 
                 translationTable->insert(layerKey, newIndex);
@@ -427,7 +427,8 @@ bool AutoMapper::setupTilesets(Map *src, Map *dst)
             Properties properties = replacementTile->properties();
             properties.merge(tileset->tileAt(i)->properties());
 
-            undoStack->push(new ChangeProperties(tr("Tile"),
+            undoStack->push(new ChangeProperties(mMapDocument,
+                                                 tr("Tile"),
                                                  replacementTile,
                                                  properties));
         }

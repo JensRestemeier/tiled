@@ -5,9 +5,12 @@
 *.ui                text
 *.pro 		    text eol=lf
 
+*.bat               eol=crlf
+
 *.png               binary
 *.bmp		    binary
 
 .gitignore          export-ignore
 .gitattributes      export-ignore
 .mailmap            export-ignore
+.tx                 export-ignore

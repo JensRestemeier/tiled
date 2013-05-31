@@ -27,6 +27,9 @@
 class QAction;
 
 namespace Tiled {
+
+class ObjectGroup;
+
 namespace Internal {
 
 class MapDocument;
@@ -53,6 +56,7 @@ public:
     QAction *actionSelectAll() const { return mActionSelectAll; }
     QAction *actionSelectNone() const { return mActionSelectNone; }
     QAction *actionCropToSelection() const { return mActionCropToSelection; }
+
     QAction *actionAddTileLayer() const { return mActionAddTileLayer; }
     QAction *actionAddColourLayer() const { return mActionAddColourLayer; }
     QAction *actionAddObjectGroup() const { return mActionAddObjectGroup; }
@@ -60,7 +64,6 @@ public:
     QAction *actionDuplicateLayer() const { return mActionDuplicateLayer; }
     QAction *actionMergeLayerDown() const { return mActionMergeLayerDown; }
     QAction *actionRemoveLayer() const { return mActionRemoveLayer; }
-    QAction *actionRenameLayer() const { return mActionRenameLayer; }
     QAction *actionSelectPreviousLayer() const
     { return mActionSelectPreviousLayer; }
     QAction *actionSelectNextLayer() const { return mActionSelectNextLayer; }
@@ -68,7 +71,10 @@ public:
     QAction *actionMoveLayerDown() const { return mActionMoveLayerDown; }
     QAction *actionToggleOtherLayers() const
     { return mActionToggleOtherLayers; }
-    QAction *actionLayerProperties() const { return mActionLayerProperties; }
+
+    QAction *actionDuplicateObjects() const { return mActionDuplicateObjects; }
+    QAction *actionRemoveObjects() const { return mActionRemoveObjects; }
+
 
 signals:
     void mapDocumentChanged(MapDocument *mapDocument);
@@ -92,8 +98,11 @@ public slots:
     void moveLayerUp();
     void moveLayerDown();
     void removeLayer();
-    void renameLayer();
     void toggleOtherLayers();
+
+    void duplicateObjects();
+    void removeObjects();
+    void moveObjectsToGroup(ObjectGroup *);
 
 private slots:
     void updateActions();
@@ -104,6 +113,7 @@ private:
     QAction *mActionSelectAll;
     QAction *mActionSelectNone;
     QAction *mActionCropToSelection;
+
     QAction *mActionAddTileLayer;
     QAction *mActionAddObjectGroup;
     QAction *mActionAddImageLayer;
@@ -111,13 +121,14 @@ private:
     QAction *mActionDuplicateLayer;
     QAction *mActionMergeLayerDown;
     QAction *mActionRemoveLayer;
-    QAction *mActionRenameLayer;
     QAction *mActionSelectPreviousLayer;
     QAction *mActionSelectNextLayer;
     QAction *mActionMoveLayerUp;
     QAction *mActionMoveLayerDown;
     QAction *mActionToggleOtherLayers;
-    QAction *mActionLayerProperties;
+
+    QAction *mActionDuplicateObjects;
+    QAction *mActionRemoveObjects;
 
     static MapDocumentActionHandler *mInstance;
 };

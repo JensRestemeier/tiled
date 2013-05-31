@@ -75,7 +75,7 @@ public:
 private:
     void writeMap(QXmlStreamWriter &w, const Map *map);
     void writeTileset(QXmlStreamWriter &w, const Tileset *tileset,
-                      uint firstGid);
+                      unsigned firstGid);
     void writeTileLayer(QXmlStreamWriter &w, const TileLayer *tileLayer);
     void writeColourLayer(QXmlStreamWriter &w, const ColourLayer *colourLayer);
     void writeLayerAttributes(QXmlStreamWriter &w, const Layer *layer);
@@ -182,7 +182,7 @@ void MapWriterPrivate::writeMap(QXmlStreamWriter &w, const Map *map)
     writeProperties(w, map->properties());
 
     mGidMapper.clear();
-    uint firstGid = 1;
+    unsigned firstGid = 1;
     foreach (Tileset *tileset, map->tilesets()) {
         writeTileset(w, tileset, firstGid);
         mGidMapper.insert(firstGid, tileset);
@@ -190,7 +190,7 @@ void MapWriterPrivate::writeMap(QXmlStreamWriter &w, const Map *map)
     }
 
     foreach (const Layer *layer, map->layers()) {
-        const Layer::Type type = layer->type();
+        const Layer::TypeFlag type = layer->layerType();
         if (type == Layer::TileLayerType)
             writeTileLayer(w, static_cast<const TileLayer*>(layer));
         else if (type == Layer::ObjectGroupType)
@@ -218,7 +218,7 @@ static QString makeTerrainAttribute(const Tile *tile)
 }
 
 void MapWriterPrivate::writeTileset(QXmlStreamWriter &w, const Tileset *tileset,
-                                    uint firstGid)
+                                    unsigned firstGid)
 {
     w.writeStartElement(QLatin1String("tileset"));
     if (firstGid > 0)
@@ -304,7 +304,7 @@ void MapWriterPrivate::writeTileset(QXmlStreamWriter &w, const Tileset *tileset,
     for (int i = 0; i < tileset->tileCount(); ++i) {
         const Tile *tile = tileset->tileAt(i);
         const Properties properties = tile->properties();
-        unsigned int terrain = tile->terrain();
+        unsigned terrain = tile->terrain();
         float probability = tile->terrainProbability();
 
         if (!properties.isEmpty() || terrain != 0xFFFFFFFF || probability != -1.f || imageSource.isEmpty()) {
@@ -373,7 +373,7 @@ void MapWriterPrivate::writeTileLayer(QXmlStreamWriter &w,
     if (mLayerDataFormat == Map::XML) {
         for (int y = 0; y < tileLayer->height(); ++y) {
             for (int x = 0; x < tileLayer->width(); ++x) {
-                const uint gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
+                const unsigned gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
                 w.writeStartElement(QLatin1String("tile"));
                 w.writeAttribute(QLatin1String("gid"), QString::number(gid));
                 w.writeEndElement();
@@ -384,7 +384,7 @@ void MapWriterPrivate::writeTileLayer(QXmlStreamWriter &w,
 
         for (int y = 0; y < tileLayer->height(); ++y) {
             for (int x = 0; x < tileLayer->width(); ++x) {
-                const uint gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
+                const unsigned gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
                 tileData.append(QString::number(gid));
                 if (x != tileLayer->width() - 1
                     || y != tileLayer->height() - 1)
@@ -401,7 +401,7 @@ void MapWriterPrivate::writeTileLayer(QXmlStreamWriter &w,
 
         for (int y = 0; y < tileLayer->height(); ++y) {
             for (int x = 0; x < tileLayer->width(); ++x) {
-                const uint gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
+                const unsigned gid = mGidMapper.cellToGid(tileLayer->cellAt(x, y));
                 tileData.append((char) (gid));
                 tileData.append((char) (gid >> 8));
                 tileData.append((char) (gid >> 16));
@@ -588,8 +588,8 @@ void MapWriterPrivate::writeObject(QXmlStreamWriter &w,
     if (!type.isEmpty())
         w.writeAttribute(QLatin1String("type"), type);
 
-    if (mapObject->tile()) {
-        const uint gid = mGidMapper.cellToGid(Cell(mapObject->tile()));
+    if (!mapObject->cell().isEmpty()) {
+        const unsigned gid = mGidMapper.cellToGid(mapObject->cell());
         w.writeAttribute(QLatin1String("gid"), QString::number(gid));
     }
 
@@ -607,6 +607,10 @@ void MapWriterPrivate::writeObject(QXmlStreamWriter &w,
         w.writeAttribute(QLatin1String("width"), QString::number(size.x()));
     if (size.y() != 0)
         w.writeAttribute(QLatin1String("height"), QString::number(size.y()));
+
+    const qreal rotation = mapObject->rotation();
+    if (rotation != 0.0)
+        w.writeAttribute(QLatin1String("rotation"), QString::number(rotation));
 
     if (!mapObject->isVisible())
         w.writeAttribute(QLatin1String("visible"), QLatin1String("0"));

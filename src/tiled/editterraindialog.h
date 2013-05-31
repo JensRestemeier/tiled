@@ -24,6 +24,7 @@
 #include <QDialog>
 
 class QModelIndex;
+class QShortcut;
 
 namespace Ui {
 class EditTerrainDialog;
@@ -31,6 +32,7 @@ class EditTerrainDialog;
 
 namespace Tiled {
 
+class Terrain;
 class Tile;
 class Tileset;
 
@@ -52,8 +54,8 @@ public:
 
 private slots:
     void selectedTerrainChanged(const QModelIndex &index);
-    void clearTerrainToggled(bool checked);
-    void addTerrainType();
+    void eraseTerrainToggled(bool checked);
+    void addTerrainType(Tile *tile = 0);
     void removeTerrainType();
     void setTerrainImage(Tile *tile);
 
@@ -65,6 +67,8 @@ private:
     int mInitialUndoStackIndex;
     Tileset *mTileset;
     TerrainModel *mTerrainModel;
+    QShortcut *mUndoShortcut;
+    QShortcut *mRedoShortcut;
 };
 
 } // namespace Internal

@@ -100,10 +100,6 @@ public:
                        const MapObject *object,
                        const QColor &color) const;
 
-    void drawImageLayer(QPainter *painter,
-                        const ImageLayer *layer,
-                        const QRectF &exposed = QRectF()) const;
-
     void drawColourLayer(QPainter *painter, const ColourLayer *layer,
                        const QRectF &exposed = QRectF()) const {}
 

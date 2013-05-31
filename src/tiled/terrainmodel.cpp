@@ -24,55 +24,33 @@
 
 #include "map.h"
 #include "mapdocument.h"
+#include "renameterrain.h"
 #include "terrain.h"
 #include "tileset.h"
 #include "tile.h"
 
-#include <QUndoCommand>
-#include <QCoreApplication>
+#include <QApplication>
+#include <QFont>
+#include <QPalette>
 
 using namespace Tiled;
 using namespace Tiled::Internal;
-
-namespace {
-
-class RenameTerrain : public QUndoCommand
-{
-public:
-    RenameTerrain(MapDocument *mapDocument,
-                  Tileset *tileset,
-                  int terrainId,
-                  const QString &newName)
-        : QUndoCommand(QCoreApplication::translate("Undo Commands",
-                                                   "Change Terrain Name"))
-        , mTerrainModel(mapDocument->terrainModel())
-        , mTileset(tileset)
-        , mTerrainId(terrainId)
-        , mOldName(tileset->terrain(terrainId)->name())
-        , mNewName(newName)
-    {}
-
-    void undo()
-    { mTerrainModel->setTerrainName(mTileset, mTerrainId, mOldName); }
-
-    void redo()
-    { mTerrainModel->setTerrainName(mTileset, mTerrainId, mNewName); }
-
-private:
-    TerrainModel *mTerrainModel;
-    Tileset *mTileset;
-    int mTerrainId;
-    QString mOldName;
-    QString mNewName;
-};
-
-} // anonymous namespace
 
 TerrainModel::TerrainModel(MapDocument *mapDocument,
                            QObject *parent):
     QAbstractItemModel(parent),
     mMapDocument(mapDocument)
 {
+    connect(mapDocument, SIGNAL(tilesetAboutToBeAdded(int)),
+            this, SLOT(tilesetAboutToBeAdded(int)));
+    connect(mapDocument, SIGNAL(tilesetAdded(int,Tileset*)),
+            this, SLOT(tilesetAdded()));
+    connect(mapDocument, SIGNAL(tilesetAboutToBeRemoved(int)),
+            this, SLOT(tilesetAboutToBeRemoved(int)));
+    connect(mapDocument, SIGNAL(tilesetRemoved(Tileset*)),
+            this, SLOT(tilesetRemoved()));
+    connect(mapDocument, SIGNAL(tilesetNameChanged(Tileset*)),
+            this, SLOT(tilesetNameChanged(Tileset*)));
 }
 
 TerrainModel::~TerrainModel()
@@ -99,11 +77,11 @@ QModelIndex TerrainModel::index(Tileset *tileset) const
     return createIndex(row, 0);
 }
 
-QModelIndex TerrainModel::index(Terrain *terrain, int column) const
+QModelIndex TerrainModel::index(Terrain *terrain) const
 {
     Tileset *tileset = terrain->tileset();
     int row = tileset->terrains().indexOf(terrain);
-    return createIndex(row, column, tileset);
+    return createIndex(row, 0, tileset);
 }
 
 QModelIndex TerrainModel::parent(const QModelIndex &child) const
@@ -127,27 +105,39 @@ int TerrainModel::rowCount(const QModelIndex &parent) const
 int TerrainModel::columnCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    return 2;
+    return 1;
 }
 
 QVariant TerrainModel::data(const QModelIndex &index, int role) const
 {
     if (Terrain *terrain = terrainAt(index)) {
-        if (role == TerrainRole)
+        switch (role) {
+        case Qt::DisplayRole:
+        case Qt::EditRole:
+            return terrain->name();
+        case Qt::DecorationRole:
+            if (Tile *imageTile = terrain->imageTile())
+                return imageTile->image();
+            break;
+        case TerrainRole:
             return QVariant::fromValue(terrain);
-
-        if (index.column() == 0) {
-            if (role == Qt::DecorationRole) {
-                if (Tile *imageTile = terrain->imageTile())
-                    return imageTile->image();
-            }
-        } else if (index.column() == 1) {
-            if (role == Qt::DisplayRole || role == Qt::EditRole)
-                return terrain->name();
         }
     } else if (Tileset *tileset = tilesetAt(index)) {
-        if (index.column() == 0 && role == Qt::DisplayRole)
+        switch (role) {
+        case Qt::DisplayRole:
             return tileset->name();
+        case Qt::SizeHintRole:
+            return QSize(1, 32);
+        case Qt::FontRole: {
+            QFont font = QApplication::font();
+            font.setBold(true);
+            return font;
+        }
+        case Qt::BackgroundRole: {
+            QColor bg = QApplication::palette().alternateBase().color();
+            return bg;//.darker(103);
+        }
+        }
     }
 
     return QVariant();
@@ -157,9 +147,6 @@ bool TerrainModel::setData(const QModelIndex &index,
                            const QVariant &value,
                            int role)
 {
-    if (index.column() != 1)
-        return false;
-
     if (role == Qt::EditRole) {
         const QString newName = value.toString();
         Terrain *terrain = terrainAt(index);
@@ -179,18 +166,9 @@ bool TerrainModel::setData(const QModelIndex &index,
 Qt::ItemFlags TerrainModel::flags(const QModelIndex &index) const
 {
     Qt::ItemFlags rc = QAbstractItemModel::flags(index);
-    if (index.column() == 1)
+    if (index.parent().isValid())  // can edit terrain names
         rc |= Qt::ItemIsEditable;
     return rc;
-}
-
-QVariant TerrainModel::headerData(int /* section */,
-                                  Qt::Orientation /* orientation */,
-                                  int role) const
-{
-    if (role == Qt::SizeHintRole)
-        return QSize(1, 1);
-    return QVariant();
 }
 
 Tileset *TerrainModel::tilesetAt(const QModelIndex &index) const
@@ -246,7 +224,7 @@ Terrain *TerrainModel::takeTerrainAt(Tileset *tileset, int index)
     beginRemoveRows(tilesetIndex, index, index);
     Terrain *terrain = tileset->takeTerrainAt(index);
     endRemoveRows();
-    emit terrainRemoved(tileset, index);
+    emit terrainRemoved(terrain);
     emit dataChanged(tilesetIndex, tilesetIndex); // for TerrainFilterModel
 
     return terrain;
@@ -268,8 +246,33 @@ void TerrainModel::setTerrainImage(Tileset *tileset, int index, int tileId)
 
 void TerrainModel::emitTerrainChanged(Terrain *terrain)
 {
-    const QModelIndex topLeft = TerrainModel::index(terrain, 0);
-    const QModelIndex bottomRight = TerrainModel::index(terrain, 1);
-    emit dataChanged(topLeft, bottomRight);
-    emit terrainChanged(terrain->tileset(), topLeft.row());
+    const QModelIndex index = TerrainModel::index(terrain);
+    emit dataChanged(index, index);
+    emit terrainChanged(terrain->tileset(), index.row());
+}
+
+void TerrainModel::tilesetAboutToBeAdded(int index)
+{
+    beginInsertRows(QModelIndex(), index, index);
+}
+
+void TerrainModel::tilesetAdded()
+{
+    endInsertRows();
+}
+
+void TerrainModel::tilesetAboutToBeRemoved(int index)
+{
+    beginRemoveRows(QModelIndex(), index, index);
+}
+
+void TerrainModel::tilesetRemoved()
+{
+    endRemoveRows();
+}
+
+void TerrainModel::tilesetNameChanged(Tileset *tileset)
+{
+    const QModelIndex index = TerrainModel::index(tileset);
+    emit dataChanged(index, index);
 }

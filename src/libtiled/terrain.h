@@ -48,6 +48,7 @@ class TILEDSHARED_EXPORT Terrain : public Object
 {
 public:
     Terrain(int id, Tileset *tileset, QString name, int imageTileId):
+        Object(TerrainType),
         mId(id),
         mTileset(tileset),
         mName(name),
@@ -58,7 +59,7 @@ public:
     /**
      * Returns ID of this terrain type.
      */
-    int id() const { return this != NULL ? mId : -1; }
+    int id() const { return mId; }
 
     /**
      * Sets the ID of this terrain type.

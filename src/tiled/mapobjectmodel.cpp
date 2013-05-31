@@ -35,43 +35,6 @@
 using namespace Tiled;
 using namespace Tiled::Internal;
 
-namespace {
-
-/**
- * Used for changing object visibility.
- */
-class SetMapObjectVisible : public QUndoCommand
-{
-public:
-    SetMapObjectVisible(MapDocument *mapDocument,
-                        MapObject *mapObject,
-                        bool visible)
-        : mMapObjectModel(mapDocument->mapObjectModel())
-        , mMapObject(mapObject)
-        , mOldVisible(mapObject->isVisible())
-        , mNewVisible(visible)
-    {
-        if (visible)
-            setText(QCoreApplication::translate("Undo Commands",
-                                                "Show Object"));
-        else
-            setText(QCoreApplication::translate("Undo Commands",
-                                                "Hide Object"));
-    }
-
-    void undo() { mMapObjectModel->setObjectVisible(mMapObject, mOldVisible); }
-    void redo() { mMapObjectModel->setObjectVisible(mMapObject, mNewVisible); }
-
-private:
-    MapObjectModel *mMapObjectModel;
-    MapObject *mMapObject;
-    bool mOldVisible;
-    bool mNewVisible;
-};
-
-} // anonymous namespace
-
-
 MapObjectModel::MapObjectModel(QObject *parent):
     QAbstractItemModel(parent),
     mMapDocument(0),
@@ -445,6 +408,12 @@ void MapObjectModel::setObjectPosition(MapObject *o, const QPointF &pos)
 void MapObjectModel::setObjectSize(MapObject *o, const QSizeF &size)
 {
     o->setSize(size);
+    emit objectsChanged(QList<MapObject*>() << o);
+}
+
+void MapObjectModel::setObjectRotation(MapObject *o, qreal rotation)
+{
+    o->setRotation(rotation);
     emit objectsChanged(QList<MapObject*>() << o);
 }
 

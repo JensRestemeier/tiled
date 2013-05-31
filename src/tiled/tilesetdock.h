@@ -27,14 +27,16 @@
 #include <QList>
 #include <QMap>
 
+class QAction;
+class QActionGroup;
 class QComboBox;
+class QMenu;
+class QModelIndex;
+class QSignalMapper;
 class QStackedWidget;
 class QTabBar;
 class QToolBar;
-class QAction;
-class QSignalMapper;
 class QToolButton;
-class QMenu;
 
 namespace Tiled {
 
@@ -100,6 +102,8 @@ protected:
 private slots:
     void updateActions();
     void updateCurrentTiles();
+    void updateCurrentTile();
+    void indexPressed(const QModelIndex &index);
 
     void tilesetAdded(int index, Tileset *tileset);
     void tilesetChanged(Tileset *tileset);
@@ -114,8 +118,6 @@ private slots:
     void editTilesetProperties();
     void importTileset();
     void exportTileset();
-
-    void renameTileset();
 
     void editTerrain();
 
@@ -145,13 +147,13 @@ private:
     QAction *mExportTileset;
     QAction *mPropertiesTileset;
     QAction *mDeleteTileset;
-    QAction *mRenameTileset;
     QAction *mEditTerrain;
 
     QMap<MapDocument *, QString> mCurrentTilesets;
 
     QToolButton *mTilesetMenuButton;
     QMenu *mTilesetMenu; //opens on click of mTilesetMenu
+    QActionGroup *mTilesetActionGroup;
     QSignalMapper *mTilesetMenuMapper; //needed due to dynamic content
 
     Zoomable *mZoomable;

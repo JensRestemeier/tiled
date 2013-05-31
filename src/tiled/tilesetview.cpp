@@ -24,7 +24,6 @@
 #include "map.h"
 #include "mapdocument.h"
 #include "preferences.h"
-#include "propertiesdialog.h"
 #include "tmxmapwriter.h"
 #include "tile.h"
 #include "tileset.h"
@@ -43,8 +42,6 @@
 #include <QPinchGesture>
 #include <QUndoCommand>
 #include <QWheelEvent>
-
-#include <QDebug>
 
 using namespace Tiled;
 using namespace Tiled::Internal;
@@ -84,7 +81,7 @@ enum Corners
  * Returns a mask of the corners of a certain tile's \a terrain that contain
  * the given \a terrainTypeId.
  */
-static int terrainCorners(unsigned terrain, int terrainTypeId)
+static unsigned terrainCorners(unsigned terrain, int terrainTypeId)
 {
     const unsigned terrainIndex = terrainTypeId >= 0 ? terrainTypeId : 0xFF;
 
@@ -94,8 +91,13 @@ static int terrainCorners(unsigned terrain, int terrainTypeId)
             ((terrain & 0xFF) == terrainIndex ? BottomRight : 0);
 }
 
+static unsigned invertCorners(unsigned corners)
+{
+    return corners ^ (TopLeft | TopRight | BottomLeft | BottomRight);
+}
+
 static void paintCorners(QPainter *painter,
-                         int corners,
+                         unsigned corners,
                          const QRect &rect)
 {
     // FIXME: This only works right for orthogonal maps right now
@@ -180,19 +182,26 @@ static void paintTerrainOverlay(QPainter *painter,
     painter->setClipRect(rect);
     painter->setRenderHint(QPainter::Antialiasing);
 
-    const int corners = terrainCorners(terrain, terrainTypeId);
+    // Draw the "any terrain" background
+    painter->setBrush(QColor(128, 128, 128, 100));
+    painter->setPen(QPen(Qt::gray, 2));
+    paintCorners(painter, invertCorners(terrainCorners(terrain, -1)), rect);
 
-    // Draw the shadow
-    painter->translate(1, 1);
-    painter->setBrush(Qt::NoBrush);
-    painter->setPen(QPen(Qt::black, 2));
-    paintCorners(painter, corners, rect);
+    if (terrainTypeId != -1) {
+        const unsigned corners = terrainCorners(terrain, terrainTypeId);
 
-    // Draw the foreground
-    painter->translate(-1, -1);
-    painter->setBrush(QColor(color.red(), color.green(), color.blue(), 100));
-    painter->setPen(QPen(color, 2));
-    paintCorners(painter, corners, rect);
+        // Draw the shadow
+        painter->translate(1, 1);
+        painter->setBrush(Qt::NoBrush);
+        painter->setPen(QPen(Qt::black, 2));
+        paintCorners(painter, corners, rect);
+
+        // Draw the foreground
+        painter->translate(-1, -1);
+        painter->setBrush(QColor(color.red(), color.green(), color.blue(), 100));
+        painter->setPen(QPen(color, 2));
+        paintCorners(painter, corners, rect);
+    }
 
     painter->restore();
 }
@@ -203,15 +212,18 @@ void TileDelegate::paint(QPainter *painter,
 {
     const TilesetModel *model = static_cast<const TilesetModel*>(index.model());
     const Tile *tile = model->tileAt(index);
+    if (!tile)
+        return;
 
     const QPixmap &tileImage = tile->image();
     const int extra = mTilesetView->drawGrid() ? 1 : 0;
     const qreal zoom = mTilesetView->scale();
+    const QSize tileSize = tileImage.size() * zoom;
 
     // Compute rectangle to draw the image in: bottom- and left-aligned
     QRect targetRect = option.rect.adjusted(0, 0, -extra, -extra);
-    targetRect.setTop(targetRect.bottom() - tileImage.height() * zoom + 1);
-    targetRect.setRight(targetRect.left() + tileImage.width() * zoom - 1);
+    targetRect.setTop(targetRect.bottom() - tileSize.height() + 1);
+    targetRect.setRight(targetRect.left() + tileSize.width() - 1);
 
     // Draw the tile image
     if (Zoomable *zoomable = mTilesetView->zoomable())
@@ -264,11 +276,11 @@ QSize TileDelegate::sizeHint(const QStyleOptionViewItem & /* option */,
 {
     const TilesetModel *m = static_cast<const TilesetModel*>(index.model());
     const Tileset *tileset = m->tileset();
-    const qreal zoom = mTilesetView->scale();
+    const QSize tileSize = tileset->tileSize() * mTilesetView->scale();
     const int extra = mTilesetView->drawGrid() ? 1 : 0;
 
-    return QSize(tileset->tileWidth() * zoom + extra,
-                 tileset->tileHeight() * zoom + extra);
+    return QSize(tileSize.width() + extra,
+                 tileSize.height() + extra);
 }
 
 } // anonymous namespace
@@ -279,6 +291,7 @@ TilesetView::TilesetView(QWidget *parent)
     , mZoomable(0)
     , mMapDocument(0)
     , mEditTerrain(false)
+    , mEraseTerrain(false)
     , mTerrainId(-1)
     , mHoveredCorner(0)
     , mTerrainChanged(false)
@@ -333,7 +346,7 @@ int TilesetView::sizeHintForColumn(int column) const
         return -1;
 
     const int tileWidth = model->tileset()->tileWidth();
-    return tileWidth * scale() + (mDrawGrid ? 1 : 0);
+    return qRound(tileWidth * scale()) + (mDrawGrid ? 1 : 0);
 }
 
 int TilesetView::sizeHintForRow(int row) const
@@ -344,7 +357,7 @@ int TilesetView::sizeHintForRow(int row) const
         return -1;
 
     const int tileHeight = model->tileset()->tileHeight();
-    return tileHeight * scale() + (mDrawGrid ? 1 : 0);
+    return qRound(tileHeight * scale()) + (mDrawGrid ? 1 : 0);
 }
 
 void TilesetView::setZoomable(Zoomable *zoomable)
@@ -494,29 +507,26 @@ void TilesetView::contextMenuEvent(QContextMenuEvent *event)
     const bool isExternal = model->tileset()->isExternal();
     QMenu menu;
 
-    QIcon propIcon(QLatin1String(":images/16x16/document-properties.png"));
-
     if (tile) {
-        // Select this tile to make sure it is clear that only the properties
-        // of a single tile are being edited.
+        // Select this tile to make sure it is clear that only a single tile is
+        // being edited.
         selectionModel()->setCurrentIndex(index,
                                           QItemSelectionModel::SelectCurrent |
                                           QItemSelectionModel::Clear);
 
-        if (mEditTerrain && mTerrainId != -1) {
-            QAction *setImage = menu.addAction(tr("Set As Terrain Image"));
-            setImage->setEnabled(!isExternal);
-            connect(setImage, SIGNAL(triggered()), SLOT(selectTerrainImage()));
+        if (mEditTerrain) {
+            QAction *addTerrain = menu.addAction(tr("Add Terrain Type"));
+            addTerrain->setEnabled(!isExternal);
+            connect(addTerrain, SIGNAL(triggered()), SLOT(createNewTerrain()));
+
+            if (mTerrainId != -1) {
+                QAction *setImage = menu.addAction(tr("Set Terrain Image"));
+                setImage->setEnabled(!isExternal);
+                connect(setImage, SIGNAL(triggered()), SLOT(selectTerrainImage()));
+            }
+
+            menu.addSeparator();
         }
-
-        QAction *tileProperties = menu.addAction(propIcon,
-                                                 tr("Tile &Properties..."));
-        tileProperties->setEnabled(!isExternal);
-        Utils::setThemeIcon(tileProperties, "document-properties");
-        menu.addSeparator();
-
-        connect(tileProperties, SIGNAL(triggered()),
-                SLOT(editTileProperties()));
     }
 
 
@@ -532,23 +542,16 @@ void TilesetView::contextMenuEvent(QContextMenuEvent *event)
     menu.exec(event->globalPos());
 }
 
+void TilesetView::createNewTerrain()
+{
+    if (Tile *tile = currentTile())
+        emit createNewTerrain(tile);
+}
+
 void TilesetView::selectTerrainImage()
 {
     if (Tile *tile = currentTile())
         emit terrainImageSelected(tile);
-}
-
-void TilesetView::editTileProperties()
-{
-    Tile *tile = currentTile();
-    if (!tile)
-        return;
-
-    PropertiesDialog propertiesDialog(tr("Tile"),
-                                      tile,
-                                      mMapDocument->undoStack(),
-                                      this);
-    propertiesDialog.exec();
 }
 
 void TilesetView::setDrawGrid(bool drawGrid)
@@ -575,7 +578,7 @@ void TilesetView::applyTerrain()
 
     unsigned terrain = setTerrainCorner(tile->terrain(),
                                         mHoveredCorner,
-                                        mTerrainId);
+                                        mEraseTerrain ? 0xFF : mTerrainId);
 
     if (terrain == tile->terrain())
         return;

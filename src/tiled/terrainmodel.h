@@ -61,7 +61,7 @@ public:
                       const QModelIndex &parent = QModelIndex()) const;
 
     QModelIndex index(Tileset *tileset) const;
-    QModelIndex index(Terrain *terrain, int column = 0) const;
+    QModelIndex index(Terrain *terrain) const;
 
     QModelIndex parent(const QModelIndex &child) const;
 
@@ -95,13 +95,6 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const;
 
     /**
-     * Returns a small size hint, to prevent the headers from affecting the
-     * minimum width and height of the sections.
-     */
-    QVariant headerData(int section, Qt::Orientation orientation,
-                        int role = Qt::DisplayRole) const;
-
-    /**
      * Returns the tileset at the given \a index, or 0 if there is no tileset.
      */
     Tileset *tilesetAt(const QModelIndex &index) const;
@@ -118,12 +111,19 @@ public:
 
 signals:
     void terrainAdded(Tileset *tileset, int terrainId);
-    void terrainRemoved(Tileset *tileset, int terrainId);
+    void terrainRemoved(Terrain *terrain);
 
     /**
      * Emitted when either the name or the image of a terrain changed.
      */
     void terrainChanged(Tileset *tileset, int index);
+
+private slots:
+    void tilesetAboutToBeAdded(int index);
+    void tilesetAdded();
+    void tilesetAboutToBeRemoved(int index);
+    void tilesetRemoved();
+    void tilesetNameChanged(Tileset *tileset);
 
 private:
     void emitTerrainChanged(Terrain *terrain);
