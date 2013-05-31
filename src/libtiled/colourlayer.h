@@ -3,6 +3,7 @@
 
 #include "tiled_global.h"
 
+#include "tiled.h"
 #include "layer.h"
 
 #include <QColor>
@@ -18,18 +19,6 @@ class MapObject;
 class TILEDSHARED_EXPORT ColourLayer : public Layer
 {
 public:
-    enum FlipDirection {
-        FlipHorizontally,
-        FlipVertically,
-        FlipDiagonally
-    };
-
-    enum RotateDirection {
-        RotateLeft,
-        RotateRight
-    };
-
-
     /**
      * Constructor with some parameters.
      */
